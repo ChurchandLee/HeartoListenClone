@@ -7,87 +7,48 @@ exports.handler = async (event, context) => {
     };
   }
 
-  // Enable CORS
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Content-Type': 'application/json'
-  };
-
-  // Handle preflight requests
-  if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers,
-      body: ''
-    };
-  }
+  const { message, conversationHistory } = JSON.parse(event.body);
 
   try {
-    // Parse the request body
-    const { messages, systemMessage } = JSON.parse(event.body);
-
-    // Convert OpenAI message format to Claude format
-    const claudeMessages = [];
-    
-    // Convert messages (skip system message as Claude handles it separately)
-    for (const msg of messages) {
-      if (msg.role !== 'system') {
-        claudeMessages.push({
-          role: msg.role === 'assistant' ? 'assistant' : 'user',
-          content: msg.content
-        });
-      }
-    }
-
-    // Call Anthropic API
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
         'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 800,
-        temperature: 0.75,
-        system: systemMessage,
-        messages: claudeMessages
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 1000,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are Eden, a compassionate mental health support companion. Provide empathetic, supportive responses while being clear you are not a replacement for professional help.'
+          },
+          ...conversationHistory,
+          {
+            role: 'user',
+            content: message
+          }
+        ]
       })
     });
 
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
-    }
-
     const data = await response.json();
     
-    // Convert Claude response format to match OpenAI format for compatibility
-    const responseData = {
-      choices: [{
-        message: {
-          content: data.content[0].text.trim()
-        }
-      }]
-    };
-
     return {
       statusCode: 200,
-      headers,
-      body: JSON.stringify(responseData)
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        response: data.content[0].text
+      })
     };
-
   } catch (error) {
-    console.error('Function error:', error);
     return {
       statusCode: 500,
-      headers,
-      body: JSON.stringify({ 
-        error: 'Internal server error',
-        message: error.message 
-      })
+      body: JSON.stringify({ error: 'Failed to get AI response' })
     };
   }
 };
