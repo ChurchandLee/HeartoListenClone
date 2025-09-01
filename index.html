@@ -278,6 +278,24 @@ font-size: 12px;
 color: #2e7d32;
 text-align: center;
 font-style: italic;
+transition: all 0.3s ease;
+}
+
+.pwa-status {
+background: linear-gradient(135deg, #f3e5f5 0%, #e8f5e8 100%);
+border: 2px solid rgba(156, 39, 176, 0.3);
+border-radius: 12px;
+padding: 8px 12px;
+margin: 5px 0;
+font-size: 11px;
+color: #6a1b9a;
+text-align: center;
+font-style: italic;
+display: none;
+}
+
+.pwa-status.show {
+display: block;
 }
 
 @keyframes fadeIn {
@@ -604,6 +622,11 @@ display: flex !important;
 🤖 Powered by Claude AI - Ready to support you
 </div>
 
+<!-- PWA Status Indicator -->
+<div class="pwa-status" id="pwaStatus">
+📱 App ready for offline use
+</div>
+
 <!-- Important Disclaimer -->
 <div class="disclaimer">
 <strong>⚠️ Important Safety Information:</strong>
@@ -635,6 +658,7 @@ let conversationHistory = [];
 let isFirstMessage = true;
 let disclaimerAccepted = false;
 let isUsingAI = true;
+let serviceWorkerRegistered = false;
 
 // Initialize app when page loads
 document.addEventListener('DOMContentLoaded', function() {
@@ -696,6 +720,9 @@ async function sendMessage() {
 
     if (!message) return;
 
+    // Check for emergency keywords first
+    checkForEmergencyKeywords(message);
+
     // Hide welcome section after first message
     if (isFirstMessage) {
         document.getElementById('welcomeSection').style.display = 'none';
@@ -726,6 +753,9 @@ async function sendMessage() {
 
         // Save to conversation history
         conversationHistory.push({ user: message, ai: response });
+
+        // Update conversation context
+        updateConversationContext();
 
         // Update AI status
         updateAIStatus('✅ Response generated successfully');
@@ -809,4 +839,413 @@ function detectMentalHealthConditions(message) {
     const conditions = [];
 
     // Depression indicators
-    if (lowerMessage.match(/\b(depresse
+    if (lowerMessage.match(/\b(depressed|depression|hopeless|worthless|empty|numb|sad|down|low|can't feel|lost interest|nothing matters|pointless|exhausted|tired all the time)\b/)) {
+        conditions.push('depression');
+    }
+
+    // Anxiety indicators
+    if (lowerMessage.match(/\b(anxious|anxiety|panic|worried|nervous|scared|afraid|fear|racing heart|can't breathe|overwhelming|catastrophic thinking|what if)\b/)) {
+        conditions.push('anxiety');
+    }
+
+    // Stress indicators
+    if (lowerMessage.match(/\b(stressed|overwhelmed|too much|can't cope|burned out|pressure|deadline)\b/)) {
+        conditions.push('stress');
+    }
+
+    // Loneliness indicators
+    if (lowerMessage.match(/\b(lonely|alone|isolated|disconnected|no friends|nobody understands)\b/)) {
+        conditions.push('loneliness');
+    }
+
+    // Relationship issues
+    if (lowerMessage.match(/\b(relationship|breakup|partner|boyfriend|girlfriend|marriage|divorce|family problems)\b/)) {
+        conditions.push('relationships');
+    }
+
+    // Work/career issues
+    if (lowerMessage.match(/\b(work|job|career|boss|colleague|workplace|unemployed|fired|quit)\b/)) {
+        conditions.push('work');
+    }
+
+    return conditions.length > 0 ? conditions : ['general'];
+}
+
+// Emotional tone analysis
+function analyzeEmotionalTone(message) {
+    const lowerMessage = message.toLowerCase();
+
+    if (lowerMessage.match(/\b(angry|mad|furious|rage|pissed|frustrated)\b/)) return 'angry';
+    if (lowerMessage.match(/\b(sad|crying|tears|heartbroken|devastated)\b/)) return 'sad';
+    if (lowerMessage.match(/\b(scared|terrified|frightened|afraid|fearful)\b/)) return 'fearful';
+    if (lowerMessage.match(/\b(excited|happy|joy|great|amazing|wonderful)\b/)) return 'positive';
+    if (lowerMessage.match(/\b(confused|lost|don't know|uncertain|mixed up)\b/)) return 'confused';
+
+    return 'neutral';
+}
+
+// Context analysis
+function analyzeContext(message, history) {
+    return {
+        isFirstMessage: history.length === 0,
+        previousTopics: history.slice(-3).map(h => h.user).join(' '),
+        messageLength: message.length,
+        timeOfDay: new Date().getHours()
+    };
+}
+
+// Response selection system for fallback
+function selectResponse(conditions, tone, context) {
+    const primaryCondition = conditions[0] || 'general';
+    const responses = getResponseBank();
+
+    // Get appropriate response bank
+    const conditionResponses = responses[primaryCondition] || responses['general'];
+    const responseOptions = context.isFirstMessage ? 
+        conditionResponses.first_time || conditionResponses : 
+        conditionResponses.returning || conditionResponses;
+
+    // Select response
+    let selectedResponse;
+    if (Array.isArray(responseOptions)) {
+        selectedResponse = responseOptions[Math.floor(Math.random() * responseOptions.length)];
+    } else {
+        selectedResponse = responseOptions;
+    }
+
+    return selectedResponse;
+}
+
+// Fallback response bank
+function getResponseBank() {
+    return {
+        depression: [
+            "I hear how heavy things feel right now. Depression can make everything seem overwhelming and exhausting. You're not alone in feeling this way, and it takes courage to reach out. What's been the hardest part of your day today?",
+
+            "That sounds incredibly difficult to carry. When we're dealing with depression, even small tasks can feel monumental. Have you been able to take care of yourself today - maybe had something to eat or gotten a bit of rest?",
+
+            "I can sense the weight you're feeling. Depression has a way of making us feel disconnected from the things that usually bring us joy. Is there anything, even something very small, that has brought you a moment of comfort recently?"
+        ],
+
+        anxiety: [
+            "Anxiety can feel so overwhelming - like your mind is racing and you can't catch your breath. What you're experiencing is real and valid. Are you somewhere safe right now where you can try some slow, deep breathing?",
+
+            "Those anxious thoughts can spiral so quickly. It sounds like your mind is working overtime trying to protect you, but it's exhausting. Have you tried any grounding techniques, like naming 5 things you can see around you?",
+
+            "I understand that anxious feeling - it's like your body is preparing for danger even when you're safe. Sometimes anxiety tries to solve problems by worrying, but it ends up creating more distress. What's worrying you most right now?"
+        ],
+
+        stress: [
+            "It sounds like you're carrying a lot right now. Stress can build up until everything feels urgent and overwhelming. What's the biggest source of pressure you're dealing with today?",
+
+            "That level of stress must be exhausting. When everything feels like too much, sometimes we need to step back and prioritize. What's one thing you could let go of or ask for help with?",
+
+            "I hear how overwhelmed you're feeling. Stress has a way of making everything seem equally urgent. Have you been able to take any breaks today, even just for a few minutes?"
+        ],
+
+        loneliness: [
+            "Loneliness can feel so profound, like you're the only person in the world feeling this way. But you're not alone in experiencing loneliness - it's one of the most human experiences we share. What's making you feel most isolated right now?",
+
+            "That sense of disconnection is so painful. Even when we're surrounded by people, we can still feel deeply alone. Is there someone in your life you feel comfortable reaching out to, even just to say hello?",
+
+            "I'm here with you right now, and I want you to know that your feelings matter. Loneliness doesn't mean there's something wrong with you - it often means you're someone who values connection. What kind of connection are you most missing?"
+        ],
+
+        relationships: [
+            "Relationship challenges can affect every part of our lives. It sounds like you're going through something really difficult. Do you want to share what's happening?",
+
+            "People we care about have such power to hurt us, but also to heal us. It sounds like you're in pain right now. What's the most challenging part of what you're dealing with?",
+
+            "Relationships can be so complex - full of love and frustration at the same time. What you're going through sounds really hard. How are you taking care of yourself through this?"
+        ],
+
+        work: [
+            "Work stress can really take over our lives, especially when we're feeling overwhelmed or unsupported. What's been the most challenging aspect of your work situation?",
+
+            "Career challenges can affect so much more than just our professional lives - they impact our sense of worth and security. What's going on at work that's weighing on you?",
+
+            "Job situations can feel all-consuming when they're not going well. It sounds like work is really affecting you right now. Are you able to find any separation between work stress and your personal time?"
+        ],
+
+        general: [
+            "I'm here to listen to whatever is on your mind. Sometimes it helps just to have someone hear what you're going through. What would you like to share?",
+
+            "Thank you for reaching out. It takes courage to open up about what we're experiencing. I'm here to support you through whatever you're dealing with. What's been on your heart lately?",
+
+            "I'm glad you're here and that you felt comfortable sharing with me. Everyone deserves to have their feelings heard and validated. What's the most important thing you want me to understand about how you're feeling?",
+
+            "Life can bring so many different challenges and experiences. I want you to know this is a safe space for you to express whatever you're going through. What's been weighing on you recently?"
+        ]
+    };
+}
+
+// Add message to chat
+function addMessage(content, type) {
+    const chatArea = document.getElementById('chatArea');
+    const messageDiv = document.createElement('div');
+
+    if (type === 'user') {
+        messageDiv.className = 'message user-message';
+        messageDiv.textContent = content;
+    } else if (type === 'ai') {
+        messageDiv.className = 'message ai-message';
+        messageDiv.innerHTML = `
+            <img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
+            <div class="ai-message-content">${content}</div>
+        `;
+    } else if (type === 'error') {
+        messageDiv.className = 'message error-message';
+        messageDiv.textContent = content;
+    }
+
+    chatArea.appendChild(messageDiv);
+    smoothScrollToBottom();
+    return messageDiv;
+}
+
+// Add typing indicator
+function addTypingIndicator() {
+    const chatArea = document.getElementById('chatArea');
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'message ai-message';
+    typingDiv.innerHTML = `
+        <img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
+        <div class="ai-message-content">
+            <div class="thinking-heart">💚</div>
+        </div>
+    `;
+
+    chatArea.appendChild(typingDiv);
+    smoothScrollToBottom();
+    return typingDiv;
+}
+
+// Update AI status indicator
+function updateAIStatus(status) {
+    const statusElement = document.getElementById('aiStatus');
+    if (statusElement) {
+        statusElement.textContent = status;
+        // Auto-hide status after 5 seconds unless it's an error
+        if (!status.includes('❌') && !status.includes('⚠️')) {
+            setTimeout(() => {
+                statusElement.textContent = '🤖 Powered by Claude AI - Ready to support you';
+            }, 5000);
+        }
+    }
+}
+
+// Update PWA status indicator
+function updatePWAStatus(status, show = true) {
+    const statusElement = document.getElementById('pwaStatus');
+    if (statusElement) {
+        statusElement.textContent = status;
+        if (show) {
+            statusElement.className = 'pwa-status show';
+        } else {
+            statusElement.className = 'pwa-status';
+        }
+    }
+}
+
+// Emergency detection in messages
+function checkForEmergencyKeywords(message) {
+    const emergencyKeywords = [
+        'suicide', 'kill myself', 'end my life', 'want to die', 'hurt myself', 
+        'self harm', 'cutting', 'overdose', 'jump off', 'hang myself'
+    ];
+    
+    const lowerMessage = message.toLowerCase();
+    const hasEmergencyKeywords = emergencyKeywords.some(keyword => 
+        lowerMessage.includes(keyword)
+    );
+    
+    if (hasEmergencyKeywords) {
+        // Show emergency resources immediately after AI response
+        setTimeout(() => {
+            addMessage(`🚨 I'm very concerned about what you've shared. Please know that help is available right now:
+
+• **Emergency Services**: Call 999 (UK), 911 (US), or your local emergency number
+• **UK Crisis Support**: Samaritans at 116 123 (free, 24/7)
+• **US Crisis Support**: 988 (Suicide & Crisis Lifeline)
+• **Crisis Text Line**: Text "HOME" to 741741
+
+You don't have to go through this alone. Professional help is available, and there are people who care about you and want to help you through this difficult time.`, 'ai');
+        }, 2000);
+    }
+}
+
+// Conversation context tracking
+function updateConversationContext() {
+    if (conversationHistory.length > 10) {
+        // Keep only the last 10 exchanges to manage memory
+        conversationHistory = conversationHistory.slice(-10);
+    }
+}
+
+// Auto-scroll to bottom when new messages arrive
+function smoothScrollToBottom() {
+    const chatArea = document.getElementById('chatArea');
+    chatArea.scrollTo({
+        top: chatArea.scrollHeight,
+        behavior: 'smooth'
+    });
+}
+
+// Enhanced Service Worker registration for PWA functionality
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js')
+            .then(function(registration) {
+                console.log('ServiceWorker registration successful');
+                serviceWorkerRegistered = true;
+                updatePWAStatus('📱 App installed - Works offline!', true);
+                
+                // Hide PWA status after 3 seconds
+                setTimeout(() => {
+                    updatePWAStatus('', false);
+                }, 3000);
+                
+                // Check for updates
+                registration.addEventListener('updatefound', function() {
+                    const newWorker = registration.installing;
+                    newWorker.addEventListener('statechange', function() {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            updatePWAStatus('🔄 New version available - Refresh to update', true);
+                        }
+                    });
+                });
+            })
+            .catch(function(err) {
+                console.log('ServiceWorker registration failed: ', err);
+                updatePWAStatus('⚠️ Offline mode unavailable', true);
+                setTimeout(() => {
+                    updatePWAStatus('', false);
+                }, 3000);
+            });
+    });
+}
+
+// Handle online/offline status
+window.addEventListener('online', function() {
+    updateAIStatus('🟢 Back online - Claude AI available');
+    isUsingAI = true;
+    if (serviceWorkerRegistered) {
+        updatePWAStatus('🌐 Connected - Full features available', true);
+        setTimeout(() => {
+            updatePWAStatus('', false);
+        }, 3000);
+    }
+});
+
+window.addEventListener('offline', function() {
+    updateAIStatus('🔴 Offline - Using local responses only');
+    isUsingAI = false;
+    if (serviceWorkerRegistered) {
+        updatePWAStatus('📱 Offline mode - Basic support available', true);
+    } else {
+        updatePWAStatus('❌ No offline support - Install app for offline use', true);
+    }
+});
+
+// Initialize online status
+if (!navigator.onLine) {
+    updateAIStatus('🔴 Offline - Using local responses only');
+    isUsingAI = false;
+    if (serviceWorkerRegistered) {
+        updatePWAStatus('📱 Offline mode active', true);
+    }
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(event) {
+    // Ctrl/Cmd + Enter to send message
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        sendMessage();
+    }
+    
+    // Escape to clear input
+    if (event.key === 'Escape') {
+        document.getElementById('messageInput').value = '';
+    }
+});
+
+// Focus management
+document.getElementById('messageInput').addEventListener('blur', function() {
+    // Re-focus after a short delay to keep input accessible
+    setTimeout(() => {
+        if (disclaimerAccepted && !document.getElementById('sendButton').disabled) {
+            this.focus();
+        }
+    }, 100);
+});
+
+// Prevent form submission on enter (handled by handleKeyPress)
+document.getElementById('messageInput').addEventListener('keydown', function(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+    }
+});
+
+// Error handling for network issues
+window.addEventListener('error', function(event) {
+    console.error('Global error:', event.error);
+    updateAIStatus('⚠️ Unexpected error occurred');
+});
+
+// Unhandled promise rejection handling
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('Unhandled promise rejection:', event.reason);
+    updateAIStatus('⚠️ Network or processing error');
+});
+
+// PWA Install prompt handling
+let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', function(event) {
+    // Prevent Chrome 67 and earlier from automatically showing the prompt
+    event.preventDefault();
+    // Stash the event so it can be triggered later
+    deferredPrompt = event;
+    
+    // Show custom install banner
+    updatePWAStatus('📱 Install app for better experience - Tap here!', true);
+    
+    // Make PWA status clickable for install
+    const pwaStatus = document.getElementById('pwaStatus');
+    if (pwaStatus) {
+        pwaStatus.style.cursor = 'pointer';
+        pwaStatus.onclick = function() {
+            // Show the install prompt
+            deferredPrompt.prompt();
+            
+            // Wait for the user to respond to the prompt
+            deferredPrompt.userChoice.then(function(choiceResult) {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('User accepted the install prompt');
+                    updatePWAStatus('✅ App installed successfully!', true);
+                } else {
+                    console.log('User dismissed the install prompt');
+                    updatePWAStatus('', false);
+                }
+                deferredPrompt = null;
+                pwaStatus.onclick = null;
+                pwaStatus.style.cursor = 'default';
+            });
+        };
+    }
+});
+
+// Handle successful app install
+window.addEventListener('appinstalled', function(event) {
+    console.log('HeartoListen app installed successfully');
+    updatePWAStatus('✅ App installed - Now available offline!', true);
+    setTimeout(() => {
+        updatePWAStatus('', false);
+    }, 5000);
+});
+
+console.log('HeartoListen app initialized with Claude AI integration and full PWA support');
+</script>
+
+</body>
+</html>
