@@ -1,12 +1,10 @@
-sw.js - Github Pages Service Worker const CACHE_NAME = 'mindfulchat-v1';
-const BASE_PATH = '/ubiquitous-guacamole';
-
+const CACHE_NAME = 'heartolisten-v1';
 const urlsToCache = [
-  `${BASE_PATH}/`,
-  `${BASE_PATH}/index.html`,
-  `${BASE_PATH}/manifest.json`,
-  `${BASE_PATH}/pwa.js`,
-  // Add other assets you want to cache
+  '/',
+  '/index.html',
+  'https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/earheart.png',
+  'https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png',
+  'https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/fern background.png'
 ];
 
 self.addEventListener('install', function(event) {
@@ -22,11 +20,7 @@ self.addEventListener('fetch', function(event) {
   event.respondWith(
     caches.match(event.request)
       .then(function(response) {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      }
-    )
+        return response || fetch(event.request);
+      })
   );
 });
