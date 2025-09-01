@@ -1,15 +1,30 @@
 {
-  "name": "heartolisten-app",
+  "name": "heartolisten",
   "version": "1.0.0",
-  "description": "AI Mental Wellbeing Support App",
+  "description": "AI Mental Wellbeing Support App powered by Claude",
   "main": "index.html",
   "scripts": {
-    "build": "echo 'No build process needed'"
+    "dev": "netlify dev",
+    "build": "echo 'Static site - no build required'",
+    "deploy": "netlify deploy --prod"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.27.0"
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "keywords": [
+    "mental-health",
+    "ai",
+    "claude",
+    "wellness",
+    "support",
+    "pwa"
+  ],
+  "author": "ChurchandLee",
+  "license": "MIT"
 }
