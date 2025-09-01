@@ -202,6 +202,50 @@ line-height: 1.6;
 margin-bottom: 15px;
 }
 
+.ai-status {
+background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+border: 2px solid rgba(76, 175, 80, 0.3);
+border-radius: 12px;
+padding: 10px 15px;
+margin: 10px 0;
+font-size: 12px;
+color: #2e7d32;
+text-align: center;
+font-style: italic;
+transition: all 0.3s ease;
+}
+
+/* Memory recap section */
+.memory-recap {
+background: linear-gradient(135deg, rgba(142, 175, 120, 0.08) 0%, rgba(255, 223, 186, 0.08) 100%);
+border: 2px dashed rgba(142, 175, 120, 0.3);
+border-radius: 12px;
+padding: 15px;
+margin: 15px 0;
+font-size: 13px;
+color: #5a6c57;
+text-align: left;
+}
+
+.memory-recap h4 {
+color: #8eaf78;
+margin-bottom: 10px;
+font-size: 14px;
+display: flex;
+align-items: center;
+gap: 8px;
+}
+
+.memory-recap ul {
+padding-left: 20px;
+margin: 0;
+}
+
+.memory-recap li {
+margin-bottom: 5px;
+line-height: 1.4;
+}
+
 .disclaimer {
 background: linear-gradient(135deg, #fff8dc 0%, #ffeaa7 100%);
 border: 2px solid #f39c12;
@@ -266,36 +310,6 @@ transform: translateY(0);
 opacity: 0.6;
 cursor: not-allowed;
 transform: none;
-}
-
-.ai-status {
-background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
-border: 2px solid rgba(76, 175, 80, 0.3);
-border-radius: 12px;
-padding: 10px 15px;
-margin: 10px 0;
-font-size: 12px;
-color: #2e7d32;
-text-align: center;
-font-style: italic;
-transition: all 0.3s ease;
-}
-
-.pwa-status {
-background: linear-gradient(135deg, #f3e5f5 0%, #e8f5e8 100%);
-border: 2px solid rgba(156, 39, 176, 0.3);
-border-radius: 12px;
-padding: 8px 12px;
-margin: 5px 0;
-font-size: 11px;
-color: #6a1b9a;
-text-align: center;
-font-style: italic;
-display: none;
-}
-
-.pwa-status.show {
-display: block;
 }
 
 @keyframes fadeIn {
@@ -542,18 +556,14 @@ max-width: 250px;
 }
 }
 
-.disclaimer-hidden {
+.hidden {
 display: none !important;
-}
-
-.disclaimer-visible {
-display: flex !important;
 }
 </style>
 </head>
 <body>
 <!-- DISCLAIMER MODAL -->
-<div id="disclaimerOverlay" class="disclaimer-overlay disclaimer-visible">
+<div id="disclaimerOverlay" class="disclaimer-overlay hidden">
 <div class="disclaimer-modal">
 <div class="warning-icon">⚠️</div>
 <h2>Important Disclaimer</h2>
@@ -622,9 +632,10 @@ display: flex !important;
 🤖 Powered by Claude AI - Ready to support you
 </div>
 
-<!-- PWA Status Indicator -->
-<div class="pwa-status" id="pwaStatus">
-📱 App ready for offline use
+<!-- Memory Recap Section (hidden initially) -->
+<div class="memory-recap" id="memoryRecap" style="display: none;">
+<h4>Previous conversations:</h4>
+<ul id="memoryList"></ul>
 </div>
 
 <!-- Important Disclaimer -->
@@ -658,411 +669,415 @@ let conversationHistory = [];
 let isFirstMessage = true;
 let disclaimerAccepted = false;
 let isUsingAI = true;
-let serviceWorkerRegistered = false;
 
-// Initialize app when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    showDisclaimer();
-    
-    // Disable main app until disclaimer is accepted
-    document.getElementById('messageInput').disabled = true;
-    document.getElementById('sendButton').disabled = true;
+// MEMORY SYSTEM
+const MEMORY_KEY = 'heartoListenMemories';
+const MAX_MEMORIES = 10;
+const MEMORY_EXPIRY_DAYS = 30;
+
+// Memory management functions
+function saveMemory(userMessage, aiResponse, emotion = null) {
+const memories = getMemories();
+const newMemory = {
+id: Date.now(),
+date: new Date().toISOString(),
+userMessage: userMessage,
+aiResponse: aiResponse,
+emotion: emotion,
+timestamp: Date.now()
+};
+
+memories.unshift(newMemory);
+const recentMemories = memories.slice(0, MAX_MEMORIES);
+
+const now = Date.now();
+const validMemories = recentMemories.filter(memory => {
+const memoryAge = now - memory.timestamp;
+const daysSinceMemory = memoryAge / (1000 * 60 * 60 * 24);
+return daysSinceMemory <= MEMORY_EXPIRY_DAYS;
 });
 
-function showDisclaimer() {
-    const overlay = document.getElementById('disclaimerOverlay');
-    overlay.className = 'disclaimer-overlay disclaimer-visible';
-    console.log('Disclaimer shown');
+localStorage.setItem(MEMORY_KEY, JSON.stringify(validMemories));
+}
+
+function getMemories() {
+try {
+const stored = localStorage.getItem(MEMORY_KEY);
+return stored ? JSON.parse(stored) : [];
+} catch (error) {
+console.error('Error retrieving memories:', error);
+return [];
+}
+}
+
+function extractEmotion(message) {
+const lowerMessage = message.toLowerCase();
+if (lowerMessage.includes('sad') || lowerMessage.includes('depressed') || lowerMessage.includes('down')) return 'sad';
+if (lowerMessage.includes('anxious') || lowerMessage.includes('worried') || lowerMessage.includes('scared')) return 'anxious';
+if (lowerMessage.includes('angry') || lowerMessage.includes('frustrated') || lowerMessage.includes('mad')) return 'angry';
+if (lowerMessage.includes('lonely') || lowerMessage.includes('alone') || lowerMessage.includes('isolated')) return 'lonely';
+if (lowerMessage.includes('stressed') || lowerMessage.includes('overwhelmed')) return 'stressed';
+if (lowerMessage.includes('happy') || lowerMessage.includes('good') || lowerMessage.includes('better')) return 'positive';
+return null;
+}
+
+function generateMemoryContext() {
+const memories = getMemories();
+if (memories.length === 0) return '';
+
+let context = '\n\nRECENT CONVERSATION MEMORY:\n';
+memories.slice(0, 5).forEach((memory) => {
+const date = new Date(memory.date);
+const relativeTime = getRelativeTime(date);
+context += `${relativeTime}: User shared "${memory.userMessage.substring(0, 100)}..."\n`;
+if (memory.emotion) {
+context += `- User was feeling ${memory.emotion}\n`;
+}
+});
+
+context += '\nPlease acknowledge and reference relevant previous conversations naturally in your response when appropriate.\n';
+return context;
+}
+
+function getRelativeTime(date) {
+const now = new Date();
+const diffMs = now - date;
+const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+if (diffHours < 1) return 'Earlier today';
+if (diffHours < 24) return diffHours === 1 ? '1 hour ago' : `${diffHours} hours ago`;
+if (diffDays === 1) return 'Yesterday';
+if (diffDays < 7) return `${diffDays} days ago`;
+return 'Last week';
+}
+
+// DISCLAIMER MODAL FUNCTIONS
+function showDisclaimerModal() {
+const hasSeenDisclaimer = localStorage.getItem('heartoListenDisclaimerSeen');
+if (hasSeenDisclaimer !== 'true') {
+document.getElementById('disclaimerOverlay').classList.remove('hidden');
+document.body.style.overflow = 'hidden';
+}
 }
 
 function acceptDisclaimer() {
-    const overlay = document.getElementById('disclaimerOverlay');
-    overlay.className = 'disclaimer-overlay disclaimer-hidden';
-    
-    // Enable the app
-    disclaimerAccepted = true;
-    document.getElementById('messageInput').disabled = false;
-    document.getElementById('sendButton').disabled = false;
-    document.getElementById('messageInput').focus();
-    
-    console.log('Disclaimer accepted');
+localStorage.setItem('heartoListenDisclaimerSeen', 'true');
+document.getElementById('disclaimerOverlay').classList.add('hidden');
+document.body.style.overflow = 'auto';
+disclaimerAccepted = true;
+
+setTimeout(() => {
+document.getElementById('messageInput').focus();
+}, 100);
 }
 
 function getNeedHelpNow() {
-    // Show crisis resources immediately
-    const crisisMessage = `IMMEDIATE HELP AVAILABLE:\n\n` +
-        `🚨 EMERGENCY: Call your local emergency number\n\n` +
-        `CRISIS SUPPORT:\n` +
-        `• UK & Ireland: 116 123 (Samaritans - free, 24/7)\n` +
-        `• USA: 988 (Suicide & Crisis Lifeline)\n` +
-        `• Australia: 13 11 14 (Lifeline)\n` +
-        `• Crisis Text Line: Text "HOME" to 741741\n\n` +
-        `You are not alone. Help is available right now.`;
-    
-    alert(crisisMessage);
-    
-    // Open Samaritans website
-    window.open('https://www.samaritans.org/', '_blank');
+window.open('https://988lifeline.org/', '_blank');
+window.open('https://www.samaritans.org/', '_blank');
+window.open('https://www.lifeline.org.au/', '_blank');
 }
+
+// Initialize app when page loads
+document.addEventListener('DOMContentLoaded', function() {
+showDisclaimerModal();
+});
 
 // Handle key press
 function handleKeyPress(event) {
-    if (event.key === 'Enter') {
-        sendMessage();
-    }
+if (event.key === 'Enter') {
+sendMessage();
 }
-
-// Main send message function
-async function sendMessage() {
-    const messageInput = document.getElementById('messageInput');
-    const sendButton = document.getElementById('sendButton');
-    const message = messageInput.value.trim();
-
-    if (!message) return;
-
-    // Check for emergency keywords first
-    checkForEmergencyKeywords(message);
-
-    // Hide welcome section after first message
-    if (isFirstMessage) {
-        document.getElementById('welcomeSection').style.display = 'none';
-        document.getElementById('logoHeader').classList.add('compact');
-        isFirstMessage = false;
-    }
-
-    // Disable input
-    messageInput.value = '';
-    sendButton.disabled = true;
-    sendButton.textContent = 'Sending...';
-
-    // Add user message
-    addMessage(message, 'user');
-
-    // Show typing indicator
-    const typingIndicator = addTypingIndicator();
-
-    try {
-        // Generate AI response
-        const response = await generateAIResponse(message);
-
-        // Remove typing indicator
-        typingIndicator.remove();
-
-        // Add AI response
-        addMessage(response, 'ai');
-
-        // Save to conversation history
-        conversationHistory.push({ user: message, ai: response });
-
-        // Update conversation context
-        updateConversationContext();
-
-        // Update AI status
-        updateAIStatus('✅ Response generated successfully');
-
-    } catch (error) {
-        console.error('Error getting response:', error);
-        typingIndicator.remove();
-        
-        // Try fallback response
-        try {
-            const fallbackResponse = await generateFallbackResponse(message);
-            addMessage(fallbackResponse, 'ai');
-            conversationHistory.push({ user: message, ai: fallbackResponse });
-            updateAIStatus('⚠️ Using fallback responses - Claude AI temporarily unavailable');
-        } catch (fallbackError) {
-            addMessage('I apologize, but I\'m having trouble responding right now. Please try again in a moment. Remember, if you\'re in crisis, please contact emergency services immediately.', 'error');
-            updateAIStatus('❌ Connection issues - Please try again');
-        }
-    }
-
-    // Re-enable input
-    sendButton.disabled = false;
-    sendButton.textContent = 'Send';
-    messageInput.focus();
-}
-
-// Generate AI response using Claude API
-async function generateAIResponse(userMessage) {
-    try {
-        updateAIStatus('🤖 Claude AI is thinking...');
-        
-        const response = await fetch('/.netlify/functions/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                message: userMessage,
-                conversationHistory: conversationHistory
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error(data.error || 'Unknown error occurred');
-        }
-
-        return data.response;
-
-    } catch (error) {
-        console.error('Error with Claude API:', error);
-        updateAIStatus('⚠️ Claude AI unavailable, switching to backup...');
-        throw error;
-    }
-}
-
-// Fallback response system (your original logic)
-async function generateFallbackResponse(userMessage) {
-    // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 2000));
-
-    // Detect mental health conditions and emotional tone
-    const conditions = detectMentalHealthConditions(userMessage);
-    const emotionalTone = analyzeEmotionalTone(userMessage);
-    const context = analyzeContext(userMessage, conversationHistory);
-
-    // Generate contextual response
-    const response = selectResponse(conditions, emotionalTone, context);
-
-    return response;
-}
-
-// Mental health condition detection
-function detectMentalHealthConditions(message) {
-    const lowerMessage = message.toLowerCase();
-    const conditions = [];
-
-    // Depression indicators
-    if (lowerMessage.match(/\b(depressed|depression|hopeless|worthless|empty|numb|sad|down|low|can't feel|lost interest|nothing matters|pointless|exhausted|tired all the time)\b/)) {
-        conditions.push('depression');
-    }
-
-    // Anxiety indicators
-    if (lowerMessage.match(/\b(anxious|anxiety|panic|worried|nervous|scared|afraid|fear|racing heart|can't breathe|overwhelming|catastrophic thinking|what if)\b/)) {
-        conditions.push('anxiety');
-    }
-
-    // Stress indicators
-    if (lowerMessage.match(/\b(stressed|overwhelmed|too much|can't cope|burned out|pressure|deadline)\b/)) {
-        conditions.push('stress');
-    }
-
-    // Loneliness indicators
-    if (lowerMessage.match(/\b(lonely|alone|isolated|disconnected|no friends|nobody understands)\b/)) {
-        conditions.push('loneliness');
-    }
-
-    // Relationship issues
-    if (lowerMessage.match(/\b(relationship|breakup|partner|boyfriend|girlfriend|marriage|divorce|family problems)\b/)) {
-        conditions.push('relationships');
-    }
-
-    // Work/career issues
-    if (lowerMessage.match(/\b(work|job|career|boss|colleague|workplace|unemployed|fired|quit)\b/)) {
-        conditions.push('work');
-    }
-
-    return conditions.length > 0 ? conditions : ['general'];
-}
-
-// Emotional tone analysis
-function analyzeEmotionalTone(message) {
-    const lowerMessage = message.toLowerCase();
-
-    if (lowerMessage.match(/\b(angry|mad|furious|rage|pissed|frustrated)\b/)) return 'angry';
-    if (lowerMessage.match(/\b(sad|crying|tears|heartbroken|devastated)\b/)) return 'sad';
-    if (lowerMessage.match(/\b(scared|terrified|frightened|afraid|fearful)\b/)) return 'fearful';
-    if (lowerMessage.match(/\b(excited|happy|joy|great|amazing|wonderful)\b/)) return 'positive';
-    if (lowerMessage.match(/\b(confused|lost|don't know|uncertain|mixed up)\b/)) return 'confused';
-
-    return 'neutral';
-}
-
-// Context analysis
-function analyzeContext(message, history) {
-    return {
-        isFirstMessage: history.length === 0,
-        previousTopics: history.slice(-3).map(h => h.user).join(' '),
-        messageLength: message.length,
-        timeOfDay: new Date().getHours()
-    };
-}
-
-// Response selection system for fallback
-function selectResponse(conditions, tone, context) {
-    const primaryCondition = conditions[0] || 'general';
-    const responses = getResponseBank();
-
-    // Get appropriate response bank
-    const conditionResponses = responses[primaryCondition] || responses['general'];
-    const responseOptions = context.isFirstMessage ? 
-        conditionResponses.first_time || conditionResponses : 
-        conditionResponses.returning || conditionResponses;
-
-    // Select response
-    let selectedResponse;
-    if (Array.isArray(responseOptions)) {
-        selectedResponse = responseOptions[Math.floor(Math.random() * responseOptions.length)];
-    } else {
-        selectedResponse = responseOptions;
-    }
-
-    return selectedResponse;
-}
-
-// Fallback response bank
-function getResponseBank() {
-    return {
-        depression: [
-            "I hear how heavy things feel right now. Depression can make everything seem overwhelming and exhausting. You're not alone in feeling this way, and it takes courage to reach out. What's been the hardest part of your day today?",
-
-            "That sounds incredibly difficult to carry. When we're dealing with depression, even small tasks can feel monumental. Have you been able to take care of yourself today - maybe had something to eat or gotten a bit of rest?",
-
-            "I can sense the weight you're feeling. Depression has a way of making us feel disconnected from the things that usually bring us joy. Is there anything, even something very small, that has brought you a moment of comfort recently?"
-        ],
-
-        anxiety: [
-            "Anxiety can feel so overwhelming - like your mind is racing and you can't catch your breath. What you're experiencing is real and valid. Are you somewhere safe right now where you can try some slow, deep breathing?",
-
-            "Those anxious thoughts can spiral so quickly. It sounds like your mind is working overtime trying to protect you, but it's exhausting. Have you tried any grounding techniques, like naming 5 things you can see around you?",
-
-            "I understand that anxious feeling - it's like your body is preparing for danger even when you're safe. Sometimes anxiety tries to solve problems by worrying, but it ends up creating more distress. What's worrying you most right now?"
-        ],
-
-        stress: [
-            "It sounds like you're carrying a lot right now. Stress can build up until everything feels urgent and overwhelming. What's the biggest source of pressure you're dealing with today?",
-
-            "That level of stress must be exhausting. When everything feels like too much, sometimes we need to step back and prioritize. What's one thing you could let go of or ask for help with?",
-
-            "I hear how overwhelmed you're feeling. Stress has a way of making everything seem equally urgent. Have you been able to take any breaks today, even just for a few minutes?"
-        ],
-
-        loneliness: [
-            "Loneliness can feel so profound, like you're the only person in the world feeling this way. But you're not alone in experiencing loneliness - it's one of the most human experiences we share. What's making you feel most isolated right now?",
-
-            "That sense of disconnection is so painful. Even when we're surrounded by people, we can still feel deeply alone. Is there someone in your life you feel comfortable reaching out to, even just to say hello?",
-
-            "I'm here with you right now, and I want you to know that your feelings matter. Loneliness doesn't mean there's something wrong with you - it often means you're someone who values connection. What kind of connection are you most missing?"
-        ],
-
-        relationships: [
-            "Relationship challenges can affect every part of our lives. It sounds like you're going through something really difficult. Do you want to share what's happening?",
-
-            "People we care about have such power to hurt us, but also to heal us. It sounds like you're in pain right now. What's the most challenging part of what you're dealing with?",
-
-            "Relationships can be so complex - full of love and frustration at the same time. What you're going through sounds really hard. How are you taking care of yourself through this?"
-        ],
-
-        work: [
-            "Work stress can really take over our lives, especially when we're feeling overwhelmed or unsupported. What's been the most challenging aspect of your work situation?",
-
-            "Career challenges can affect so much more than just our professional lives - they impact our sense of worth and security. What's going on at work that's weighing on you?",
-
-            "Job situations can feel all-consuming when they're not going well. It sounds like work is really affecting you right now. Are you able to find any separation between work stress and your personal time?"
-        ],
-
-        general: [
-            "I'm here to listen to whatever is on your mind. Sometimes it helps just to have someone hear what you're going through. What would you like to share?",
-
-            "Thank you for reaching out. It takes courage to open up about what we're experiencing. I'm here to support you through whatever you're dealing with. What's been on your heart lately?",
-
-            "I'm glad you're here and that you felt comfortable sharing with me. Everyone deserves to have their feelings heard and validated. What's the most important thing you want me to understand about how you're feeling?",
-
-            "Life can bring so many different challenges and experiences. I want you to know this is a safe space for you to express whatever you're going through. What's been weighing on you recently?"
-        ]
-    };
-}
-
-// Add message to chat
-function addMessage(content, type) {
-    const chatArea = document.getElementById('chatArea');
-    const messageDiv = document.createElement('div');
-
-    if (type === 'user') {
-        messageDiv.className = 'message user-message';
-        messageDiv.textContent = content;
-    } else if (type === 'ai') {
-        messageDiv.className = 'message ai-message';
-        messageDiv.innerHTML = `
-            <img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
-            <div class="ai-message-content">${content}</div>
-        `;
-    } else if (type === 'error') {
-        messageDiv.className = 'message error-message';
-        messageDiv.textContent = content;
-    }
-
-    chatArea.appendChild(messageDiv);
-    smoothScrollToBottom();
-    return messageDiv;
-}
-
-// Add typing indicator
-function addTypingIndicator() {
-    const chatArea = document.getElementById('chatArea');
-    const typingDiv = document.createElement('div');
-    typingDiv.className = 'message ai-message';
-    typingDiv.innerHTML = `
-        <img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
-        <div class="ai-message-content">
-            <div class="thinking-heart">💚</div>
-        </div>
-    `;
-
-    chatArea.appendChild(typingDiv);
-    smoothScrollToBottom();
-    return typingDiv;
 }
 
 // Update AI status indicator
 function updateAIStatus(status) {
-    const statusElement = document.getElementById('aiStatus');
-    if (statusElement) {
-        statusElement.textContent = status;
-        // Auto-hide status after 5 seconds unless it's an error
-        if (!status.includes('❌') && !status.includes('⚠️')) {
-            setTimeout(() => {
-                statusElement.textContent = '🤖 Powered by Claude AI - Ready to support you';
-            }, 5000);
-        }
-    }
+const statusElement = document.getElementById('aiStatus');
+if (statusElement) {
+statusElement.textContent = status;
+// Auto-hide status after 5 seconds unless it's an error
+if (!status.includes('❌') && !status.includes('⚠️')) {
+setTimeout(() => {
+statusElement.textContent = '🤖 Powered by Claude AI - Ready to support you';
+}, 5000);
+}
+}
 }
 
-// Update PWA status indicator
-function updatePWAStatus(status, show = true) {
-    const statusElement = document.getElementById('pwaStatus');
-    if (statusElement) {
-        statusElement.textContent = status;
-        if (show) {
-            statusElement.className = 'pwa-status show';
-        } else {
-            statusElement.className = 'pwa-status';
-        }
-    }
+// Main send message function
+async function sendMessage() {
+const messageInput = document.getElementById('messageInput');
+const sendButton = document.getElementById('sendButton');
+const message = messageInput.value.trim();
+
+if (!message || !disclaimerAccepted) return;
+
+// Hide welcome section after first message
+if (isFirstMessage) {
+document.getElementById('welcomeSection').style.display = 'none';
+document.getElementById('logoHeader').classList.add('compact');
+isFirstMessage = false;
+}
+
+// Disable input
+messageInput.value = '';
+sendButton.disabled = true;
+sendButton.textContent = 'Sending...';
+
+// Add user message
+addMessage(message, 'user');
+
+// Show typing indicator
+const typingIndicator = addTypingIndicator();
+
+try {
+// Generate AI response using Claude
+const response = await generateClaudeResponse(message);
+
+// Remove typing indicator
+typingIndicator.remove();
+
+// Add AI response
+addMessage(response, 'ai');
+
+// Save to conversation history and memory
+conversationHistory.push({ user: message, ai: response });
+const emotion = extractEmotion(message);
+saveMemory(message, response, emotion);
+
+// Update AI status
+updateAIStatus('✅ Response generated successfully');
+
+} catch (error) {
+console.error('Error getting response:', error);
+typingIndicator.remove();
+
+// Try fallback response
+try {
+const fallbackResponse = await generateFallbackResponse(message);
+addMessage(fallbackResponse, 'ai');
+conversationHistory.push({ user: message, ai: fallbackResponse });
+const emotion = extractEmotion(message);
+saveMemory(message, fallbackResponse, emotion);
+updateAIStatus('⚠️ Using fallback responses - Claude AI temporarily unavailable');
+} catch (fallbackError) {
+addMessage('I apologize, but I\'m having trouble responding right now. Please try again in a moment. Remember, if you\'re in crisis, please contact emergency services immediately.', 'error');
+updateAIStatus('❌ Connection issues - Please try again');
+}
+}
+
+// Re-enable input
+sendButton.disabled = false;
+sendButton.textContent = 'Send';
+messageInput.focus();
+}
+
+// Generate Claude AI response using Netlify function
+async function generateClaudeResponse(userMessage) {
+try {
+updateAIStatus('🤖 Claude AI is thinking...');
+
+// Prepare message with memory context
+const memoryContext = generateMemoryContext();
+const messageWithMemory = userMessage + memoryContext;
+
+const response = await fetch('/.netlify/functions/chat', {
+method: 'POST',
+headers: {
+'Content-Type': 'application/json',
+},
+body: JSON.stringify({
+message: messageWithMemory,
+conversationHistory: conversationHistory,
+hasMemories: getMemories().length > 0
+})
+});
+
+if (!response.ok) {
+throw new Error(`HTTP error! status: ${response.status}`);
+}
+
+const data = await response.json();
+
+if (!data.success) {
+throw new Error(data.error || 'Unknown error occurred');
+}
+
+return data.response;
+
+} catch (error) {
+console.error('Error with Claude API:', error);
+updateAIStatus('⚠️ Claude AI unavailable, switching to backup...');
+throw error;
+}
+}
+
+// Enhanced fallback response system (preserving your original intelligent responses)
+async function generateFallbackResponse(userMessage) {
+await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 2000));
+
+const memories = getMemories();
+const hasMemories = memories.length > 0;
+
+const responses = {
+// Crisis/Suicidal ideation - ONLY for explicit crisis situations
+crisis: [
+"I'm really concerned about what you've shared with me. This sounds like you're in serious emotional pain right now. Your safety is the most important thing, and there are people specifically trained to help with these feelings:\n\n• US: 988 (Suicide & Crisis Lifeline) - 24/7\n• UK: 116 123 (Samaritans) - 24/7\n• Crisis Text: HOME to 741741\n\nAre you in immediate danger right now? Can you stay safe while we talk about getting you connected with crisis support?"
+],
+
+// Depression with memory integration
+depression: hasMemories ? [
+"I can hear the sadness in what you're sharing, and I'm glad you feel safe enough to open up to me again. Looking back at our previous conversations, I can see you've been carrying some heavy feelings. What's been weighing on your heart lately? Has anything changed since we last talked, or are you still processing some of the same difficult emotions?",
+"Thank you for continuing to trust me with how you're feeling. I remember you've shared feelings of sadness with me before, and I want you to know that your feelings are completely valid. What does this sadness feel like for you today compared to when we've talked before? Sometimes our emotional experiences can shift and change over time."
+] : [
+"I hear that you're feeling sad right now. That takes courage to share. What's been happening in your life that's bringing up this sadness? Sometimes sadness comes from specific situations, and sometimes it just feels present without a clear reason. I'm genuinely curious about what your experience has been like.",
+"When you say you're feeling sad, I can sense there's real pain there. What does this sadness feel like for you day-to-day? Is it more of a deep ache, or something that comes and goes in waves? I'm wondering what might be weighing on your heart right now."
+],
+
+// Anxiety with memory integration 
+anxiety: hasMemories ? [
+"I can sense the anxiety in what you're sharing, and I appreciate you coming back to talk with me about it. From what I remember of our previous conversations, you've been dealing with some worrying thoughts. What's been triggering your anxiety most recently? Are these similar concerns to what we've discussed before, or is this something new that's come up?",
+"I notice you're feeling scared or anxious again. I remember this has been something you've been working through. What does the anxiety feel like in your body and mind right now? Are you finding that any of the things we've talked about before are helping, or is this feeling different this time?"
+] : [
+"I can hear that you're feeling scared right now. Fear can be such an overwhelming emotion, especially when it feels big and consuming. What's frightening you most at the moment? Sometimes naming our fears can help us understand them better and figure out what might help you feel safer.",
+"When you say you're feeling anxious or scared, I can sense there's real distress there. What does this fear feel like in your body and mind? Are there specific thoughts or situations that are triggering these feelings, or does the anxiety seem to come from nowhere?"
+],
+
+// Loneliness with memory integration
+loneliness: hasMemories ? [
+"I hear that loneliness in your words, and it makes my heart go out to you. I remember you've shared feelings of being alone with me before, and I want you to know that reaching out here shows such strength. Has the loneliness been feeling the same as when we last talked, or has something shifted? What does connection look like for you right now?",
+"The loneliness you're describing sounds so painful, and I'm grateful you feel comfortable sharing that with me again. From our previous conversations, I can see this has been something you've been navigating for a while. What kind of connection are you most craving today? Is it similar to what we've talked about before, or has that feeling changed?"
+] : [
+"I hear that you're feeling lonely right now. Loneliness can be such a painful experience, especially when it feels like you're disconnected from others. What does this loneliness look like for you? Are you physically alone, or is it more that feeling of being around people but still feeling unseen or misunderstood?",
+"When you say you feel lonely, I can sense there's a real ache there. What kind of connection are you most missing right now? Is it wanting close friendships, family connection, or maybe just someone who really understands what you're going through?"
+],
+
+// Greeting - differentiated for new vs returning users
+greeting: hasMemories ? [
+"Hello! It's so good to see you again. I've been thinking about our previous conversations and how you've been doing. What's been happening in your world since we last talked? I'm genuinely curious to hear how things have been going for you.",
+"Hi there! Welcome back. I remember some of the things you've shared with me before, and I'm really glad you feel comfortable coming back to talk. What's been on your mind lately? How are you feeling about the things we've discussed in our previous conversations?"
+] : [
+"Hello! I'm really glad you're here and that you've decided to reach out. This is your safe space to share whatever's truly on your mind. What brought you here today? Whether it's something specific weighing on you or you're just feeling a bit off and not sure why, I'm here to listen and explore it with you.",
+"Hi there! Thank you for taking the step to reach out today. I'm Eden, and I'm genuinely curious about what's happening in your world right now. What's been occupying your thoughts lately, or what made you want to talk to someone today? This is your space to be completely open and honest."
+],
+
+// General with memory integration
+general: hasMemories ? [
+"I can sense there's something on your mind, and I'm glad you came back to talk with me. Thinking about our previous conversations, I'm curious about what's been occupying your thoughts lately. Is this connected to some of the things we've discussed before, or is this something new that's come up for you?",
+"Thank you for continuing to trust me with what you're going through. I remember some of the things you've shared before, and I'm wondering how you've been processing those experiences. What feels most important for you to talk about today? Is it building on something we've discussed, or something entirely new?"
+] : [
+"I can sense there's something weighing on you. What's been occupying your thoughts lately? Sometimes just having space to talk through what's on our minds can help us process things better. What feels most important for you to share right now?",
+"It sounds like you're going through something. What's your inner world like at the moment? I'm genuinely curious about your experience and what's been feeling most challenging or confusing for you lately."
+]
+};
+
+const lowerMessage = userMessage.toLowerCase();
+let responseCategory = 'general';
+
+// Enhanced detection logic
+if (lowerMessage.includes('suicidal') || lowerMessage.includes('kill myself') || lowerMessage.includes('want to die') || 
+lowerMessage.includes('end my life') || lowerMessage.includes('suicide') || lowerMessage.includes('self harm') || 
+lowerMessage.includes('hurt myself') || lowerMessage.includes('better off dead') || lowerMessage.includes('no point living')) {
+responseCategory = 'crisis';
+}
+else if (lowerMessage.includes('anxious') || lowerMessage.includes('anxiety') || lowerMessage.includes('panic') || 
+lowerMessage.includes('nervous') || lowerMessage.includes('i feel anxious') || lowerMessage.includes('i am anxious') ||
+lowerMessage.includes('worried') || lowerMessage.includes('i feel worried') || lowerMessage.includes('i am worried') || 
+lowerMessage.includes('feel scared') || lowerMessage.includes('i feel scared') || lowerMessage.includes('i am scared') ||
+lowerMessage.includes('afraid') || lowerMessage.includes('i feel afraid') || lowerMessage.includes('i am afraid')) {
+responseCategory = 'anxiety';
+}
+else if (lowerMessage.includes('depressed') || lowerMessage.includes('depression') || lowerMessage.includes('sad') || 
+lowerMessage.includes('hopeless') || lowerMessage.includes('down') || lowerMessage.includes('low') ||
+lowerMessage.includes('i feel sad') || lowerMessage.includes('i am sad') || lowerMessage.includes('feel sad') ||
+lowerMessage.includes('i feel down') || lowerMessage.includes('i am down') || lowerMessage.includes('feel down') ||
+lowerMessage.includes('i feel depressed') || lowerMessage.includes('i am depressed') || lowerMessage.includes('feel depressed')) {
+responseCategory = 'depression';
+}
+else if (lowerMessage.includes('lonely') || lowerMessage.includes('loneliness') || lowerMessage.includes('alone') || 
+lowerMessage.includes('isolated') || lowerMessage.includes('i feel lonely') || lowerMessage.includes('i am lonely') ||
+lowerMessage.includes('feel lonely') || lowerMessage.includes('i feel alone') || lowerMessage.includes('i am alone') ||
+lowerMessage.includes('feel alone') || lowerMessage.includes('no friends') || lowerMessage.includes('nobody cares')) {
+responseCategory = 'loneliness';
+}
+else if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey') ||
+lowerMessage.includes('good morning') || lowerMessage.includes('good evening') || lowerMessage.includes('good afternoon')) {
+responseCategory = 'greeting';
+}
+
+// Get response from category
+const categoryResponses = responses[responseCategory] || responses['general'];
+const selectedResponse = categoryResponses[Math.floor(Math.random() * categoryResponses.length)];
+
+return selectedResponse;
+}
+
+// Add message to chat
+function addMessage(content, type) {
+const chatArea = document.getElementById('chatArea');
+const messageDiv = document.createElement('div');
+
+if (type === 'user') {
+messageDiv.className = 'message user-message';
+messageDiv.textContent = content;
+} else if (type === 'ai') {
+messageDiv.className = 'message ai-message';
+messageDiv.innerHTML = `
+<img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
+<div class="ai-message-content">${content}</div>
+`;
+} else if (type === 'error') {
+messageDiv.className = 'message error-message';
+messageDiv.textContent = content;
+}
+
+chatArea.appendChild(messageDiv);
+smoothScrollToBottom();
+return messageDiv;
+}
+
+// Add typing indicator
+function addTypingIndicator() {
+const chatArea = document.getElementById('chatArea');
+const typingDiv = document.createElement('div');
+typingDiv.className = 'message ai-message';
+typingDiv.innerHTML = `
+<img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
+<div class="ai-message-content">
+<div class="thinking-heart">💚</div>
+</div>
+`;
+
+chatArea.appendChild(typingDiv);
+smoothScrollToBottom();
+return typingDiv;
+}
+
+// Auto-scroll to bottom when new messages arrive
+function smoothScrollToBottom() {
+const chatArea = document.getElementById('chatArea');
+chatArea.scrollTo({
+top: chatArea.scrollHeight,
+behavior: 'smooth'
+});
 }
 
 // Emergency detection in messages
 function checkForEmergencyKeywords(message) {
-    const emergencyKeywords = [
-        'suicide', 'kill myself', 'end my life', 'want to die', 'hurt myself', 
-        'self harm', 'cutting', 'overdose', 'jump off', 'hang myself'
-    ];
-    
-    const lowerMessage = message.toLowerCase();
-    const hasEmergencyKeywords = emergencyKeywords.some(keyword => 
-        lowerMessage.includes(keyword)
-    );
-    
-    if (hasEmergencyKeywords) {
-        // Show emergency resources immediately after AI response
-        setTimeout(() => {
-            addMessage(`🚨 I'm very concerned about what you've shared. Please know that help is available right now:
+const emergencyKeywords = [
+'suicide', 'kill myself', 'end my life', 'want to die', 'hurt myself', 
+'self harm', 'cutting', 'overdose', 'jump off', 'hang myself'
+];
+
+const lowerMessage = message.toLowerCase();
+const hasEmergencyKeywords = emergencyKeywords.some(keyword => 
+lowerMessage.includes(keyword)
+);
+
+if (hasEmergencyKeywords) {
+// Show emergency resources immediately after AI response
+setTimeout(() => {
+addMessage(`🚨 I'm very concerned about what you've shared. Please know that help is available right now:
 
 • **Emergency Services**: Call 999 (UK), 911 (US), or your local emergency number
 • **UK Crisis Support**: Samaritans at 116 123 (free, 24/7)
@@ -1070,181 +1085,66 @@ function checkForEmergencyKeywords(message) {
 • **Crisis Text Line**: Text "HOME" to 741741
 
 You don't have to go through this alone. Professional help is available, and there are people who care about you and want to help you through this difficult time.`, 'ai');
-        }, 2000);
-    }
+}, 2000);
 }
-
-// Conversation context tracking
-function updateConversationContext() {
-    if (conversationHistory.length > 10) {
-        // Keep only the last 10 exchanges to manage memory
-        conversationHistory = conversationHistory.slice(-10);
-    }
-}
-
-// Auto-scroll to bottom when new messages arrive
-function smoothScrollToBottom() {
-    const chatArea = document.getElementById('chatArea');
-    chatArea.scrollTo({
-        top: chatArea.scrollHeight,
-        behavior: 'smooth'
-    });
 }
 
 // Enhanced Service Worker registration for PWA functionality
 if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/sw.js')
-            .then(function(registration) {
-                console.log('ServiceWorker registration successful');
-                serviceWorkerRegistered = true;
-                updatePWAStatus('📱 App installed - Works offline!', true);
-                
-                // Hide PWA status after 3 seconds
-                setTimeout(() => {
-                    updatePWAStatus('', false);
-                }, 3000);
-                
-                // Check for updates
-                registration.addEventListener('updatefound', function() {
-                    const newWorker = registration.installing;
-                    newWorker.addEventListener('statechange', function() {
-                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            updatePWAStatus('🔄 New version available - Refresh to update', true);
-                        }
-                    });
-                });
-            })
-            .catch(function(err) {
-                console.log('ServiceWorker registration failed: ', err);
-                updatePWAStatus('⚠️ Offline mode unavailable', true);
-                setTimeout(() => {
-                    updatePWAStatus('', false);
-                }, 3000);
-            });
-    });
+window.addEventListener('load', function() {
+navigator.serviceWorker.register('/sw.js')
+.then(function(registration) {
+console.log('ServiceWorker registration successful');
+})
+.catch(function(err) {
+console.log('ServiceWorker registration failed: ', err);
+});
+});
 }
 
 // Handle online/offline status
 window.addEventListener('online', function() {
-    updateAIStatus('🟢 Back online - Claude AI available');
-    isUsingAI = true;
-    if (serviceWorkerRegistered) {
-        updatePWAStatus('🌐 Connected - Full features available', true);
-        setTimeout(() => {
-            updatePWAStatus('', false);
-        }, 3000);
-    }
+updateAIStatus('🟢 Back online - Claude AI available');
+isUsingAI = true;
 });
 
 window.addEventListener('offline', function() {
-    updateAIStatus('🔴 Offline - Using local responses only');
-    isUsingAI = false;
-    if (serviceWorkerRegistered) {
-        updatePWAStatus('📱 Offline mode - Basic support available', true);
-    } else {
-        updatePWAStatus('❌ No offline support - Install app for offline use', true);
-    }
+updateAIStatus('🔴 Offline - Using local responses only');
+isUsingAI = false;
 });
 
 // Initialize online status
 if (!navigator.onLine) {
-    updateAIStatus('🔴 Offline - Using local responses only');
-    isUsingAI = false;
-    if (serviceWorkerRegistered) {
-        updatePWAStatus('📱 Offline mode active', true);
-    }
+updateAIStatus('🔴 Offline - Using local responses only');
+isUsingAI = false;
 }
 
 // Keyboard shortcuts
 document.addEventListener('keydown', function(event) {
-    // Ctrl/Cmd + Enter to send message
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-        sendMessage();
-    }
-    
-    // Escape to clear input
-    if (event.key === 'Escape') {
-        document.getElementById('messageInput').value = '';
-    }
-});
+// Ctrl/Cmd + Enter to send message
+if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+sendMessage();
+}
 
-// Focus management
-document.getElementById('messageInput').addEventListener('blur', function() {
-    // Re-focus after a short delay to keep input accessible
-    setTimeout(() => {
-        if (disclaimerAccepted && !document.getElementById('sendButton').disabled) {
-            this.focus();
-        }
-    }, 100);
-});
-
-// Prevent form submission on enter (handled by handleKeyPress)
-document.getElementById('messageInput').addEventListener('keydown', function(event) {
-    if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-    }
+// Escape to clear input
+if (event.key === 'Escape') {
+document.getElementById('messageInput').value = '';
+}
 });
 
 // Error handling for network issues
 window.addEventListener('error', function(event) {
-    console.error('Global error:', event.error);
-    updateAIStatus('⚠️ Unexpected error occurred');
+console.error('Global error:', event.error);
+updateAIStatus('⚠️ Unexpected error occurred');
 });
 
 // Unhandled promise rejection handling
 window.addEventListener('unhandledrejection', function(event) {
-    console.error('Unhandled promise rejection:', event.reason);
-    updateAIStatus('⚠️ Network or processing error');
+console.error('Unhandled promise rejection:', event.reason);
+updateAIStatus('⚠️ Network or processing error');
 });
 
-// PWA Install prompt handling
-let deferredPrompt;
-
-window.addEventListener('beforeinstallprompt', function(event) {
-    // Prevent Chrome 67 and earlier from automatically showing the prompt
-    event.preventDefault();
-    // Stash the event so it can be triggered later
-    deferredPrompt = event;
-    
-    // Show custom install banner
-    updatePWAStatus('📱 Install app for better experience - Tap here!', true);
-    
-    // Make PWA status clickable for install
-    const pwaStatus = document.getElementById('pwaStatus');
-    if (pwaStatus) {
-        pwaStatus.style.cursor = 'pointer';
-        pwaStatus.onclick = function() {
-            // Show the install prompt
-            deferredPrompt.prompt();
-            
-            // Wait for the user to respond to the prompt
-            deferredPrompt.userChoice.then(function(choiceResult) {
-                if (choiceResult.outcome === 'accepted') {
-                    console.log('User accepted the install prompt');
-                    updatePWAStatus('✅ App installed successfully!', true);
-                } else {
-                    console.log('User dismissed the install prompt');
-                    updatePWAStatus('', false);
-                }
-                deferredPrompt = null;
-                pwaStatus.onclick = null;
-                pwaStatus.style.cursor = 'default';
-            });
-        };
-    }
-});
-
-// Handle successful app install
-window.addEventListener('appinstalled', function(event) {
-    console.log('HeartoListen app installed successfully');
-    updatePWAStatus('✅ App installed - Now available offline!', true);
-    setTimeout(() => {
-        updatePWAStatus('', false);
-    }, 5000);
-});
-
-console.log('HeartoListen app initialized with Claude AI integration and full PWA support');
+console.log('HeartoListen app initialized with Claude AI integration and advanced memory system');
 </script>
 
 </body>
