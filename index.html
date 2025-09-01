@@ -202,37 +202,6 @@ line-height: 1.6;
 margin-bottom: 15px;
 }
 
-/* Memory recap section */
-.memory-recap {
-background: linear-gradient(135deg, rgba(142, 175, 120, 0.08) 0%, rgba(255, 223, 186, 0.08) 100%);
-border: 2px dashed rgba(142, 175, 120, 0.3);
-border-radius: 12px;
-padding: 15px;
-margin: 15px 0;
-font-size: 13px;
-color: #5a6c57;
-text-align: left;
-}
-
-.memory-recap h4 {
-color: #8eaf78;
-margin-bottom: 10px;
-font-size: 14px;
-display: flex;
-align-items: center;
-gap: 8px;
-}
-
-.memory-recap ul {
-padding-left: 20px;
-margin: 0;
-}
-
-.memory-recap li {
-margin-bottom: 5px;
-line-height: 1.4;
-}
-
 .disclaimer {
 background: linear-gradient(135deg, #fff8dc 0%, #ffeaa7 100%);
 border: 2px solid #f39c12;
@@ -299,36 +268,16 @@ cursor: not-allowed;
 transform: none;
 }
 
-/* Suggestions styling */
-.suggestion-section {
-background: linear-gradient(135deg, rgba(139, 195, 74, 0.1) 0%, rgba(76, 175, 80, 0.1) 100%);
+.ai-status {
+background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
 border: 2px solid rgba(76, 175, 80, 0.3);
 border-radius: 12px;
-padding: 15px;
+padding: 10px 15px;
 margin: 10px 0;
-}
-
-.suggestion-header {
-font-weight: 600;
+font-size: 12px;
 color: #2e7d32;
-margin-bottom: 8px;
-font-size: 14px;
-}
-
-.suggestion-list {
-list-style: none;
-padding: 0;
-margin: 0;
-}
-
-.suggestion-item {
-background: rgba(255, 255, 255, 0.7);
-padding: 8px 12px;
-margin: 5px 0;
-border-radius: 8px;
-border-left: 3px solid #4CAF50;
-font-size: 13px;
-line-height: 1.4;
+text-align: center;
+font-style: italic;
 }
 
 @keyframes fadeIn {
@@ -650,6 +599,11 @@ display: flex !important;
 <p style="margin: 0;">I'm Eden and I am here to listen and support you through whatever you're experiencing. This is a safe, judgement-free space where you can share your thoughts and feelings.</p>
 </div>
 
+<!-- AI Status Indicator -->
+<div class="ai-status" id="aiStatus">
+🤖 Powered by Claude AI - Ready to support you
+</div>
+
 <!-- Important Disclaimer -->
 <div class="disclaimer">
 <strong>⚠️ Important Safety Information:</strong>
@@ -677,10 +631,10 @@ onkeypress="handleKeyPress(event)">
 
 <script>
 // Global variables
-let sessionMemories = [];
 let conversationHistory = [];
 let isFirstMessage = true;
 let disclaimerAccepted = false;
+let isUsingAI = true;
 
 // Initialize app when page loads
 document.addEventListener('DOMContentLoaded', function() {
@@ -729,218 +683,130 @@ function getNeedHelpNow() {
 
 // Handle key press
 function handleKeyPress(event) {
-if (event.key === 'Enter') {
-sendMessage();
-}
+    if (event.key === 'Enter') {
+        sendMessage();
+    }
 }
 
 // Main send message function
 async function sendMessage() {
-const messageInput = document.getElementById('messageInput');
-const sendButton = document.getElementById('sendButton');
-const message = messageInput.value.trim();
+    const messageInput = document.getElementById('messageInput');
+    const sendButton = document.getElementById('sendButton');
+    const message = messageInput.value.trim();
 
-if (!message) return;
+    if (!message) return;
 
-// Hide welcome section after first message
-if (isFirstMessage) {
-document.getElementById('welcomeSection').style.display = 'none';
-document.getElementById('logoHeader').classList.add('compact');
-isFirstMessage = false;
+    // Hide welcome section after first message
+    if (isFirstMessage) {
+        document.getElementById('welcomeSection').style.display = 'none';
+        document.getElementById('logoHeader').classList.add('compact');
+        isFirstMessage = false;
+    }
+
+    // Disable input
+    messageInput.value = '';
+    sendButton.disabled = true;
+    sendButton.textContent = 'Sending...';
+
+    // Add user message
+    addMessage(message, 'user');
+
+    // Show typing indicator
+    const typingIndicator = addTypingIndicator();
+
+    try {
+        // Generate AI response
+        const response = await generateAIResponse(message);
+
+        // Remove typing indicator
+        typingIndicator.remove();
+
+        // Add AI response
+        addMessage(response, 'ai');
+
+        // Save to conversation history
+        conversationHistory.push({ user: message, ai: response });
+
+        // Update AI status
+        updateAIStatus('✅ Response generated successfully');
+
+    } catch (error) {
+        console.error('Error getting response:', error);
+        typingIndicator.remove();
+        
+        // Try fallback response
+        try {
+            const fallbackResponse = await generateFallbackResponse(message);
+            addMessage(fallbackResponse, 'ai');
+            conversationHistory.push({ user: message, ai: fallbackResponse });
+            updateAIStatus('⚠️ Using fallback responses - Claude AI temporarily unavailable');
+        } catch (fallbackError) {
+            addMessage('I apologize, but I\'m having trouble responding right now. Please try again in a moment. Remember, if you\'re in crisis, please contact emergency services immediately.', 'error');
+            updateAIStatus('❌ Connection issues - Please try again');
+        }
+    }
+
+    // Re-enable input
+    sendButton.disabled = false;
+    sendButton.textContent = 'Send';
+    messageInput.focus();
 }
 
-// Disable input
-messageInput.value = '';
-sendButton.disabled = true;
-sendButton.textContent = 'Sending...';
-
-// Add user message
-addMessage(message, 'user');
-
-// Show typing indicator
-const typingIndicator = addTypingIndicator();
-
-try {
-// Generate AI response
-const response = await generateAIResponse(message);
-
-// Remove typing indicator
-typingIndicator.remove();
-
-// Add AI response
-addMessage(response, 'ai');
-
-// Save to memory
-conversationHistory.push({ user: message, ai: response });
-
-} catch (error) {
-typingIndicator.remove();
-addMessage('I apologize, but I\'m having trouble responding right now. Please try again in a moment. Remember, if you\'re in crisis, please contact emergency services immediately.', 'error');
-}
-
-// Re-enable input
-sendButton.disabled = false;
-sendButton.textContent = 'Send';
-messageInput.focus();
-}
-
-// Add message to chat
-function addMessage(content, type) {
-const chatArea = document.getElementById('chatArea');
-const messageDiv = document.createElement('div');
-
-if (type === 'user') {
-messageDiv.className = 'message user-message';
-messageDiv.textContent = content;
-} else if (type === 'ai') {
-messageDiv.className = 'message ai-message';
-messageDiv.innerHTML = `
-<img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
-<div class="ai-message-content">${content}</div>
-`;
-} else if (type === 'error') {
-messageDiv.className = 'message error-message';
-messageDiv.textContent = content;
-}
-
-chatArea.appendChild(messageDiv);
-chatArea.scrollTop = chatArea.scrollHeight;
-return messageDiv;
-}
-
-// Add typing indicator
-function addTypingIndicator() {
-const chatArea = document.getElementById('chatArea');
-const typingDiv = document.createElement('div');
-typingDiv.className = 'message ai-message';
-typingDiv.innerHTML = `
-<img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
-<div class="ai-message-content">
-<div class="thinking-heart">💚</div>
-</div>
-`;
-
-chatArea.appendChild(typingDiv);
-chatArea.scrollTop = chatArea.scrollHeight;
-return typingDiv;
-}
-
-// Enhanced AI response generation
+// Generate AI response using Claude API
 async function generateAIResponse(userMessage) {
-// Simulate processing delay for more natural feel
-await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 2000));
+    try {
+        updateAIStatus('🤖 Claude AI is thinking...');
+        
+        const response = await fetch('/.netlify/functions/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: userMessage,
+                conversationHistory: conversationHistory
+            })
+        });
 
-// Detect mental health conditions and emotional tone
-const conditions = detectMentalHealthConditions(userMessage);
-const emotionalTone = analyzeEmotionalTone(userMessage);
-const context = analyzeContext(userMessage, conversationHistory);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-// Generate contextual response
-const response = selectResponse(conditions, emotionalTone, context);
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Unknown error occurred');
+        }
 
-return response;
+        return data.response;
+
+    } catch (error) {
+        console.error('Error with Claude API:', error);
+        updateAIStatus('⚠️ Claude AI unavailable, switching to backup...');
+        throw error;
+    }
+}
+
+// Fallback response system (your original logic)
+async function generateFallbackResponse(userMessage) {
+    // Simulate processing delay
+    await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 2000));
+
+    // Detect mental health conditions and emotional tone
+    const conditions = detectMentalHealthConditions(userMessage);
+    const emotionalTone = analyzeEmotionalTone(userMessage);
+    const context = analyzeContext(userMessage, conversationHistory);
+
+    // Generate contextual response
+    const response = selectResponse(conditions, emotionalTone, context);
+
+    return response;
 }
 
 // Mental health condition detection
 function detectMentalHealthConditions(message) {
-const lowerMessage = message.toLowerCase();
-const conditions = [];
+    const lowerMessage = message.toLowerCase();
+    const conditions = [];
 
-// Depression indicators
-if (lowerMessage.match(/\b(depressed|depression|hopeless|worthless|empty|numb|sad|down|low|can't feel|lost interest|nothing matters|pointless|exhausted|tired all the time)\b/)) {
-conditions.push('depression');
-}
-
-// Anxiety indicators
-if (lowerMessage.match(/\b(anxious|anxiety|panic|worried|nervous|scared|afraid|fear|racing heart|can't breathe|overwhelming|catastrophic thinking|what if)\b/)) {
-conditions.push('anxiety');
-}
-
-// Stress indicators
-if (lowerMessage.match(/\b(stressed|overwhelmed|too much|can't cope|burned out|pressure|deadline)\b/)) {
-conditions.push('stress');
-}
-
-// Loneliness indicators
-if (lowerMessage.match(/\b(lonely|alone|isolated|disconnected|no friends|nobody understands)\b/)) {
-conditions.push('loneliness');
-}
-
-// Relationship issues
-if (lowerMessage.match(/\b(relationship|breakup|partner|boyfriend|girlfriend|marriage|divorce|family problems)\b/)) {
-conditions.push('relationships');
-}
-
-// Work/career issues
-if (lowerMessage.match(/\b(work|job|career|boss|colleague|workplace|unemployed|fired|quit)\b/)) {
-conditions.push('work');
-}
-
-return conditions.length > 0 ? conditions : ['general'];
-}
-
-// Emotional tone analysis
-function analyzeEmotionalTone(message) {
-const lowerMessage = message.toLowerCase();
-
-if (lowerMessage.match(/\b(angry|mad|furious|rage|pissed|frustrated)\b/)) return 'angry';
-if (lowerMessage.match(/\b(sad|crying|tears|heartbroken|devastated)\b/)) return 'sad';
-if (lowerMessage.match(/\b(scared|terrified|frightened|afraid|fearful)\b/)) return 'fearful';
-if (lowerMessage.match(/\b(excited|happy|joy|great|amazing|wonderful)\b/)) return 'positive';
-if (lowerMessage.match(/\b(confused|lost|don't know|uncertain|mixed up)\b/)) return 'confused';
-
-return 'neutral';
-}
-
-// Context analysis
-function analyzeContext(message, history) {
-return {
-isFirstMessage: history.length === 0,
-previousTopics: history.slice(-3).map(h => h.user).join(' '),
-messageLength: message.length,
-timeOfDay: new Date().getHours()
-};
-}
-
-// Response selection system
-function selectResponse(conditions, tone, context) {
-const primaryCondition = conditions[0] || 'general';
-const responses = getResponseBank();
-
-// Get appropriate response bank
-const conditionResponses = responses[primaryCondition] || responses['general'];
-const responseOptions = context.isFirstMessage ? 
-conditionResponses.first_time || conditionResponses : 
-conditionResponses.returning || conditionResponses;
-
-// Select response
-let selectedResponse;
-if (Array.isArray(responseOptions)) {
-selectedResponse = responseOptions[Math.floor(Math.random() * responseOptions.length)];
-} else {
-selectedResponse = responseOptions;
-}
-
-// Add suggestions based on condition
-const suggestions = getSuggestions(primaryCondition);
-if (suggestions.length > 0) {
-const selectedSuggestions = suggestions.sort(() => 0.5 - Math.random()).slice(0, 2);
-selectedResponse += "\n\n" + formatSuggestions(selectedSuggestions);
-}
-
-return selectedResponse;
-}
-
-// Response bank
-function getResponseBank() {
-return {
-depression: {
-first_time: [
-"I can sense the heaviness you're carrying - depression can make everything feel like you're moving through thick fog. What's been the hardest part of your day-to-day experience lately? You're not alone in this, and there are gentle ways to start caring for yourself.",
-
-"That sadness sounds so profound and exhausting. When depression settles in, it can feel like you're cut off from the parts of yourself that used to find meaning or joy. What activities or people used to bring you comfort? Even if they don't feel accessible right now, understanding what's shifted can help.",
-
-"The emptiness you're describing makes complete sense with depression - it's like your emotional world has gone gray. Are there any moments, even brief ones, when that heaviness lifts slightly? Taking care of the basics like sleep and gentle movement can sometimes help."
-],
-returning: [
-"I remember you sharing about feeling depressed before. How has that weight been since we last
+    // Depression indicators
+    if (lowerMessage.match(/\b(depresse
