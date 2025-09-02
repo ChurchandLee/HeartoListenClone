@@ -1,0 +1,28 @@
+{
+  "name": "heartolisten-app",
+  "version": "1.0.0",
+  "description": "AI Mental Wellbeing Support app",
+  "main": "index.html",
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "echo 'No build needed for static site'"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ChurchandLee/ubiquitous-guacamole.git"
+  },
+  "keywords": [
+    "mental-health",
+    "ai",
+    "wellbeing",
+    "support"
+  ],
+  "author": "ChurchandLee",
+  "license": "MIT"
+}
