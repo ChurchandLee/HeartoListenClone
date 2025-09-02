@@ -1,51 +1,93 @@
-// Replace the existing callChatGPT function in your HTML with this:
-async function callChatGPT(messages) {
-    try {
-        // Call your secure Netlify function instead of OpenAI directly
-        const response = await fetch('/.netlify/functions/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                messages: messages
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Function Error: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        // Check if backend signaled to use fallback
-        if (data.fallback) {
-            throw new Error('Backend fallback requested');
-        }
-        
-        const apiResponse = data.choices[0].message.content.trim();
-        
-        // Check if API gave generic unhelpful response - if so, use our intelligent system instead
-        if (apiResponse.includes("I'm really sorry that you're feeling this way, but I'm unable to provide the help that you need") ||
-            apiResponse.includes("It's really important to talk things over with someone who can") ||
-            apiResponse.includes("mental health professional or a trusted person in your life") ||
-            apiResponse.includes("I'm not able to provide") ||
-            apiResponse.includes("I can't provide the support you need")) {
-            
-            // Use our intelligent response system instead
-            const lastUserMessage = messages[messages.length - 1].content;
-            return generateIntelligentResponse(lastUserMessage, messages);
-        }
-        
-        return data;
-        
-    } catch (error) {
-        console.error('Backend Function Error:', error);
-        // Fall back to intelligent response system
-        const lastUserMessage = messages[messages.length - 1].content;
-        return generateIntelligentResponse(lastUserMessage, messages);
-    }
-}
+// netlify/functions/chat.js
+exports.handler = async (event, context) => {
+  // Only allow POST requests
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ error: 'Method not allowed' })
+    };
+  }
 
-// Remove this line from your HTML since the API key is now in the backend:
-// const OPENAI_API_KEY = 'YOUR_API_KEY_HERE';
+  // CORS headers
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json'
+  };
+
+  // Handle preflight requests
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers,
+      body: ''
+    };
+  }
+
+  try {
+    // Parse the request body
+    const { messages } = JSON.parse(event.body);
+    
+    if (!messages || !Array.isArray(messages)) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid messages format' })
+      };
+    }
+
+    // Your API key stored securely in Netlify environment variables
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    
+    if (!OPENAI_API_KEY) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'API key not configured' })
+      };
+    }
+
+    // Call OpenAI API
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: "gpt-3.5-turbo", // Use gpt-3.5-turbo for cost efficiency
+        messages: messages,
+        temperature: 0.75,
+        top_p: 0.9,
+        max_tokens: 800,
+        frequency_penalty: 0.3,
+        presence_penalty: 0.1,
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify(data)
+    };
+
+  } catch (error) {
+    console.error('Function error:', error);
+    
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ 
+        error: 'Internal server error',
+        fallback: true // Signal to use local fallback
+      })
+    };
+  }
+};
