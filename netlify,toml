@@ -1,16 +1,30 @@
 [build]
+  # Directory that contains the deploy-ready HTML files and assets
   publish = "."
   
+  # No build command needed for static HTML
+  command = ""
+
+# Netlify Functions configuration
 [functions]
   directory = "netlify/functions"
 
-# Redirect API calls to functions (optional but helpful)
+# Environment variables (set these in Netlify dashboard)
+[build.environment]
+  NODE_VERSION = "18"
+
+# Redirect rules for SPA behavior
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
 
-# Headers for better security
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Headers for security
 [[headers]]
   for = "/*"
   [headers.values]
@@ -18,3 +32,11 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Headers for API endpoints
+[[headers]]
+  for = "/.netlify/functions/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Headers = "Content-Type"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
