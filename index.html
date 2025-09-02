@@ -607,7 +607,256 @@
     <script>
         // DISCLAIMER MODAL FUNCTIONS
         function showDisclaimerModal() {
-            const hasAcceptedDisclaimer = sessionStorage.getItem('hearDisclaimerAccepted');
+            const lowerMessage = userMessage.toLowerCase();
+            let responseCategory = 'general';
+            
+            // Enhanced detection logic
+            if (lowerMessage.includes('suicidal') || lowerMessage.includes('kill myself') || lowerMessage.includes('want to die') || 
+                lowerMessage.includes('end my life') || lowerMessage.includes('suicide') || lowerMessage.includes('self harm') || 
+                lowerMessage.includes('hurt myself') || lowerMessage.includes('better off dead') || lowerMessage.includes('no point living')) {
+                responseCategory = 'crisis';
+            }
+            else if (lowerMessage.includes('anxious') || lowerMessage.includes('anxiety') || lowerMessage.includes('panic') || 
+                     lowerMessage.includes('nervous') || lowerMessage.includes('i feel anxious') || lowerMessage.includes('i am anxious') ||
+                     lowerMessage.includes('worried') || lowerMessage.includes('i feel worried') || lowerMessage.includes('i am worried') || 
+                     lowerMessage.includes('feel scared') || lowerMessage.includes('i feel scared') || lowerMessage.includes('i am scared') ||
+                     lowerMessage.includes('afraid') || lowerMessage.includes('i feel afraid') || lowerMessage.includes('i am afraid')) {
+                responseCategory = 'anxiety';
+            }
+            else if (lowerMessage.includes('depressed') || lowerMessage.includes('depression') || lowerMessage.includes('sad') || 
+                     lowerMessage.includes('hopeless') || lowerMessage.includes('down') || lowerMessage.includes('low') ||
+                     lowerMessage.includes('i feel sad') || lowerMessage.includes('i am sad') || lowerMessage.includes('feel sad') ||
+                     lowerMessage.includes('i feel down') || lowerMessage.includes('i am down') || lowerMessage.includes('feel down') ||
+                     lowerMessage.includes('i feel depressed') || lowerMessage.includes('i am depressed') || lowerMessage.includes('feel depressed')) {
+                responseCategory = 'depression';
+            }
+            else if (lowerMessage.includes('lonely') || lowerMessage.includes('loneliness') || lowerMessage.includes('alone') || 
+                     lowerMessage.includes('isolated') || lowerMessage.includes('i feel lonely') || lowerMessage.includes('i am lonely') ||
+                     lowerMessage.includes('feel lonely') || lowerMessage.includes('i feel alone') || lowerMessage.includes('i am alone') ||
+                     lowerMessage.includes('feel alone') || lowerMessage.includes('no friends') || lowerMessage.includes('nobody cares')) {
+                responseCategory = 'loneliness';
+            }
+            else if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey') ||
+                     lowerMessage.includes('good morning') || lowerMessage.includes('good evening') || lowerMessage.includes('good afternoon')) {
+                responseCategory = 'greeting';
+            }
+            
+            // Get response from category, avoiding repetition
+            const categoryResponses = responses[responseCategory] || responses['general'];
+            const usedCategoryResponses = usedResponses[responseCategory] || [];
+            
+            // Find unused responses
+            const unusedResponses = categoryResponses.filter(response => 
+                !usedCategoryResponses.includes(response)
+            );
+            
+            let selectedResponse;
+            if (unusedResponses.length > 0) {
+                selectedResponse = unusedResponses[Math.floor(Math.random() * unusedResponses.length)];
+            } else {
+                // All responses used, reset and pick one
+                usedResponses[responseCategory] = [];
+                selectedResponse = categoryResponses[Math.floor(Math.random() * categoryResponses.length)];
+            }
+            
+            // Track this response as used
+            if (!usedResponses[responseCategory]) {
+                usedResponses[responseCategory] = [];
+            }
+            usedResponses[responseCategory].push(selectedResponse);
+            
+            return { choices: [{ message: { content: selectedResponse } }] };
+        }
+
+        // ChatGPT API call function with secure backend
+        async function callChatGPT(messages) {
+            console.log('About to call function with messages:', messages);
+            
+            try {
+                // Call your secure Netlify function instead of OpenAI directly
+                const response = await fetch('/.netlify/functions/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        messages: messages
+                    })
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response ok:', response.ok);
+                
+                if (!response.ok) {
+                    throw new Error(`Function Error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Check if backend signaled to use fallback
+                if (data.fallback) {
+                    throw new Error('Backend fallback requested');
+                }
+                
+                const apiResponse = data.choices[0].message.content.trim();
+                
+                // Check if API gave generic unhelpful response - if so, use our intelligent system instead
+                if (apiResponse.includes("I'm really sorry that you're feeling this way, but I'm unable to provide the help that you need") ||
+                    apiResponse.includes("It's really important to talk things over with someone who can") ||
+                    apiResponse.includes("mental health professional or a trusted person in your life") ||
+                    apiResponse.includes("I'm not able to provide") ||
+                    apiResponse.includes("I can't provide the support you need")) {
+                    
+                    // Use our intelligent response system instead
+                    const lastUserMessage = messages[messages.length - 1].content;
+                    return generateIntelligentResponse(lastUserMessage, messages);
+                }
+                
+                return data;
+                
+            } catch (error) {
+                console.error('Backend Function Error:', error);
+                // Fall back to intelligent response system
+                const lastUserMessage = messages[messages.length - 1].content;
+                return generateIntelligentResponse(lastUserMessage, messages);
+            }
+        }
+
+        async function sendMessage() {
+            console.log('sendMessage called');
+            
+            const input = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+            const message = input.value.trim();
+            
+            if (message === '') return;
+            
+            // Disable send button and input
+            sendButton.disabled = true;
+            input.disabled = true;
+            
+            // Add user message to chat
+            addMessage(message, 'user');
+            input.value = '';
+            
+            // Show typing indicator
+            showTypingIndicator();
+            
+            try {
+                // Add user message to conversation history
+                conversationHistory.push({
+                    role: 'user',
+                    content: message
+                });
+
+                // Call secure backend with intelligent fallback
+                const data = await callChatGPT(conversationHistory);
+                const aiResponse = data.choices[0].message.content.trim();
+                
+                // Add AI response to conversation history
+                conversationHistory.push({
+                    role: 'assistant',
+                    content: aiResponse
+                });
+
+                // Keep conversation history manageable
+                if (conversationHistory.length > 21) {
+                    conversationHistory = [
+                        conversationHistory[0], // Keep system prompt
+                        ...conversationHistory.slice(-20) // Keep last 20 messages
+                    ];
+                }
+
+                hideTypingIndicator();
+                addMessage(aiResponse, 'ai');
+
+            } catch (error) {
+                hideTypingIndicator();
+                console.error('Error:', error);
+                
+                // Fallback to intelligent response
+                const fallbackResponse = generateIntelligentResponse(message, conversationHistory);
+                addMessage(fallbackResponse.choices[0].message.content, 'ai');
+            } finally {
+                // Re-enable send button and input
+                sendButton.disabled = false;
+                input.disabled = false;
+                input.focus();
+            }
+        }
+
+        function addMessage(content, sender) {
+            const chatArea = document.getElementById('chatArea');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+            
+            if (sender === 'ai') {
+                // Create AI message with avatar
+                messageDiv.innerHTML = `
+                    <img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
+                    <div class="ai-message-content">${content}</div>
+                `;
+            } else {
+                // Regular user message
+                messageDiv.textContent = content;
+            }
+            
+            // Remove welcome section and make header compact after first user message
+            if (sender === 'user') {
+                const welcomeSection = document.querySelector('.welcome-section');
+                if (welcomeSection) {
+                    welcomeSection.remove();
+                }
+                
+                // Make header compact
+                const logoHeader = document.getElementById('logoHeader');
+                logoHeader.classList.add('compact');
+            }
+            
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            // Remove any existing typing indicator first
+            hideTypingIndicator();
+            
+            // Create a new typing indicator
+            const chatArea = document.getElementById('chatArea');
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message ai-message';
+            typingDiv.id = 'currentTypingIndicator';
+            typingDiv.innerHTML = `
+                <img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
+                <div class="thinking-heart">💚</div>
+            `;
+            
+            chatArea.appendChild(typingDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            const existingIndicator = document.getElementById('currentTypingIndicator');
+            if (existingIndicator) {
+                existingIndicator.remove();
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            showDisclaimerModal(); // Show disclaimer first
+            document.getElementById('messageInput').focus();
+        });
+    </script>
+</body>
+</html> hasAcceptedDisclaimer = sessionStorage.getItem('hearDisclaimerAccepted');
             if (!hasAcceptedDisclaimer) {
                 document.getElementById('disclaimerOverlay').style.display = 'flex';
                 document.body.style.overflow = 'hidden';
@@ -739,243 +988,4 @@ Remember: Your goal is meaningful conversation and exploration, not immediate pr
                 ]
             };
 
-            const lowerMessage = userMessage.toLowerCase();
-            let responseCategory = 'general';
-            
-            // Enhanced detection logic
-            if (lowerMessage.includes('suicidal') || lowerMessage.includes('kill myself') || lowerMessage.includes('want to die') || 
-                lowerMessage.includes('end my life') || lowerMessage.includes('suicide') || lowerMessage.includes('self harm') || 
-                lowerMessage.includes('hurt myself') || lowerMessage.includes('better off dead') || lowerMessage.includes('no point living')) {
-                responseCategory = 'crisis';
-            }
-            else if (lowerMessage.includes('anxious') || lowerMessage.includes('anxiety') || lowerMessage.includes('panic') || 
-                     lowerMessage.includes('nervous') || lowerMessage.includes('i feel anxious') || lowerMessage.includes('i am anxious') ||
-                     lowerMessage.includes('worried') || lowerMessage.includes('i feel worried') || lowerMessage.includes('i am worried') || 
-                     lowerMessage.includes('feel scared') || lowerMessage.includes('i feel scared') || lowerMessage.includes('i am scared') ||
-                     lowerMessage.includes('afraid') || lowerMessage.includes('i feel afraid') || lowerMessage.includes('i am afraid')) {
-                responseCategory = 'anxiety';
-            }
-            else if (lowerMessage.includes('depressed') || lowerMessage.includes('depression') || lowerMessage.includes('sad') || 
-                     lowerMessage.includes('hopeless') || lowerMessage.includes('down') || lowerMessage.includes('low') ||
-                     lowerMessage.includes('i feel sad') || lowerMessage.includes('i am sad') || lowerMessage.includes('feel sad') ||
-                     lowerMessage.includes('i feel down') || lowerMessage.includes('i am down') || lowerMessage.includes('feel down') ||
-                     lowerMessage.includes('i feel depressed') || lowerMessage.includes('i am depressed') || lowerMessage.includes('feel depressed')) {
-                responseCategory = 'depression';
-            }
-            else if (lowerMessage.includes('lonely') || lowerMessage.includes('loneliness') || lowerMessage.includes('alone') || 
-                     lowerMessage.includes('isolated') || lowerMessage.includes('i feel lonely') || lowerMessage.includes('i am lonely') ||
-                     lowerMessage.includes('feel lonely') || lowerMessage.includes('i feel alone') || lowerMessage.includes('i am alone') ||
-                     lowerMessage.includes('feel alone') || lowerMessage.includes('no friends') || lowerMessage.includes('nobody cares')) {
-                responseCategory = 'loneliness';
-            }
-            else if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey') ||
-                     lowerMessage.includes('good morning') || lowerMessage.includes('good evening') || lowerMessage.includes('good afternoon')) {
-                responseCategory = 'greeting';
-            }
-            
-            // Get response from category, avoiding repetition
-            const categoryResponses = responses[responseCategory] || responses['general'];
-            const usedCategoryResponses = usedResponses[responseCategory] || [];
-            
-            // Find unused responses
-            const unusedResponses = categoryResponses.filter(response => 
-                !usedCategoryResponses.includes(response)
-            );
-            
-            let selectedResponse;
-            if (unusedResponses.length > 0) {
-                selectedResponse = unusedResponses[Math.floor(Math.random() * unusedResponses.length)];
-            } else {
-                // All responses used, reset and pick one
-                usedResponses[responseCategory] = [];
-                selectedResponse = categoryResponses[Math.floor(Math.random() * categoryResponses.length)];
-            }
-            
-            // Track this response as used
-            if (!usedResponses[responseCategory]) {
-                usedResponses[responseCategory] = [];
-            }
-            usedResponses[responseCategory].push(selectedResponse);
-            
-            return { choices: [{ message: { content: selectedResponse } }] };
-        }
-
-        // ChatGPT API call function with secure backend
-        async function callChatGPT(messages) {
-            try {
-                // Call your secure Netlify function instead of OpenAI directly
-                const response = await fetch('/.netlify/functions/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        messages: messages
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Function Error: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                
-                // Check if backend signaled to use fallback
-                if (data.fallback) {
-                    throw new Error('Backend fallback requested');
-                }
-                
-                const apiResponse = data.choices[0].message.content.trim();
-                
-                // Check if API gave generic unhelpful response - if so, use our intelligent system instead
-                if (apiResponse.includes("I'm really sorry that you're feeling this way, but I'm unable to provide the help that you need") ||
-                    apiResponse.includes("It's really important to talk things over with someone who can") ||
-                    apiResponse.includes("mental health professional or a trusted person in your life") ||
-                    apiResponse.includes("I'm not able to provide") ||
-                    apiResponse.includes("I can't provide the support you need")) {
-                    
-                    // Use our intelligent response system instead
-                    const lastUserMessage = messages[messages.length - 1].content;
-                    return generateIntelligentResponse(lastUserMessage, messages);
-                }
-                
-                return data;
-                
-            } catch (error) {
-                console.error('Backend Function Error:', error);
-                // Fall back to intelligent response system
-                const lastUserMessage = messages[messages.length - 1].content;
-                return generateIntelligentResponse(lastUserMessage, messages);
-            }
-        }
-
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const sendButton = document.getElementById('sendButton');
-            const message = input.value.trim();
-            
-            if (message === '') return;
-            
-            // Disable send button and input
-            sendButton.disabled = true;
-            input.disabled = true;
-            
-            // Add user message to chat
-            addMessage(message, 'user');
-            input.value = '';
-            
-            // Show typing indicator
-            showTypingIndicator();
-            
-            try {
-                // Add user message to conversation history
-                conversationHistory.push({
-                    role: 'user',
-                    content: message
-                });
-
-                // Call secure backend with intelligent fallback
-                const data = await callChatGPT(conversationHistory);
-                const aiResponse = data.choices[0].message.content.trim();
-                
-                // Add AI response to conversation history
-                conversationHistory.push({
-                    role: 'assistant',
-                    content: aiResponse
-                });
-
-                // Keep conversation history manageable
-                if (conversationHistory.length > 21) {
-                    conversationHistory = [
-                        conversationHistory[0], // Keep system prompt
-                        ...conversationHistory.slice(-20) // Keep last 20 messages
-                    ];
-                }
-
-                hideTypingIndicator();
-                addMessage(aiResponse, 'ai');
-
-            } catch (error) {
-                hideTypingIndicator();
-                console.error('Error:', error);
-                
-                // Fallback to intelligent response
-                const fallbackResponse = generateIntelligentResponse(message, conversationHistory);
-                addMessage(fallbackResponse.choices[0].message.content, 'ai');
-            } finally {
-                // Re-enable send button and input
-                sendButton.disabled = false;
-                input.disabled = false;
-                input.focus();
-            }
-        }
-
-        function addMessage(content, sender) {
-            const chatArea = document.getElementById('chatArea');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${sender}-message`;
-            
-            if (sender === 'ai') {
-                // Create AI message with avatar
-                messageDiv.innerHTML = `
-                    <img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
-                    <div class="ai-message-content">${content}</div>
-                `;
-            } else {
-                // Regular user message
-                messageDiv.textContent = content;
-            }
-            
-            // Remove welcome section and make header compact after first user message
-            if (sender === 'user') {
-                const welcomeSection = document.querySelector('.welcome-section');
-                if (welcomeSection) {
-                    welcomeSection.remove();
-                }
-                
-                // Make header compact
-                const logoHeader = document.getElementById('logoHeader');
-                logoHeader.classList.add('compact');
-            }
-            
-            chatArea.appendChild(messageDiv);
-            chatArea.scrollTop = chatArea.scrollHeight;
-        }
-
-        function showTypingIndicator() {
-            // Remove any existing typing indicator first
-            hideTypingIndicator();
-            
-            // Create a new typing indicator
-            const chatArea = document.getElementById('chatArea');
-            const typingDiv = document.createElement('div');
-            typingDiv.className = 'message ai-message';
-            typingDiv.id = 'currentTypingIndicator';
-            typingDiv.innerHTML = `
-                <img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
-                <div class="thinking-heart">💚</div>
-            `;
-            
-            chatArea.appendChild(typingDiv);
-            chatArea.scrollTop = chatArea.scrollHeight;
-        }
-
-        function hideTypingIndicator() {
-            const existingIndicator = document.getElementById('currentTypingIndicator');
-            if (existingIndicator) {
-                existingIndicator.remove();
-            }
-        }
-
-        function handleKeyPress(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-        }
-
-        // Initialize app
-        document.addEventListener('DOMContentLoaded', function() {
-            showDisclaimerModal(); // Show disclaimer first
-            document.getElementById('messageInput').focus();
-        });
+            const
