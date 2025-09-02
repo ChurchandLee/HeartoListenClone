@@ -632,9 +632,6 @@
             window.open('https://www.lifeline.org.au/', '_blank');
         }
 
-        // OpenAI API Configuration
-        const OPENAI_API_KEY = 'YOUR_API_KEY_HERE';
-
         // Enhanced Mental Health System Prompt for ChatGPT
         const SYSTEM_PROMPT = `You are a compassionate AI mental health companion named "Eden" from HeartoListen. Your primary role is to provide supportive, exploratory conversations that help people process their feelings and thoughts.
 
@@ -803,31 +800,31 @@ Remember: Your goal is meaningful conversation and exploration, not immediate pr
             return { choices: [{ message: { content: selectedResponse } }] };
         }
 
-        // ChatGPT API call function with fallback
+        // ChatGPT API call function with secure backend
         async function callChatGPT(messages) {
             try {
-                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                // Call your secure Netlify function instead of OpenAI directly
+                const response = await fetch('/.netlify/functions/chat', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${OPENAI_API_KEY}`,
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        model: "gpt-4",
-                        messages: messages,
-                        temperature: 0.75,
-                        top_p: 0.9,
-                        max_tokens: 800,
-                        frequency_penalty: 0.3,
-                        presence_penalty: 0.1,
+                        messages: messages
                     })
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`API Error: ${response.status}`);
+                    throw new Error(`Function Error: ${response.status}`);
                 }
                 
                 const data = await response.json();
+                
+                // Check if backend signaled to use fallback
+                if (data.fallback) {
+                    throw new Error('Backend fallback requested');
+                }
+                
                 const apiResponse = data.choices[0].message.content.trim();
                 
                 // Check if API gave generic unhelpful response - if so, use our intelligent system instead
@@ -845,7 +842,7 @@ Remember: Your goal is meaningful conversation and exploration, not immediate pr
                 return data;
                 
             } catch (error) {
-                console.error('OpenAI API Error:', error);
+                console.error('Backend Function Error:', error);
                 // Fall back to intelligent response system
                 const lastUserMessage = messages[messages.length - 1].content;
                 return generateIntelligentResponse(lastUserMessage, messages);
@@ -877,7 +874,7 @@ Remember: Your goal is meaningful conversation and exploration, not immediate pr
                     content: message
                 });
 
-                // Call ChatGPT API with intelligent fallback
+                // Call secure backend with intelligent fallback
                 const data = await callChatGPT(conversationHistory);
                 const aiResponse = data.choices[0].message.content.trim();
                 
@@ -977,11 +974,8 @@ Remember: Your goal is meaningful conversation and exploration, not immediate pr
             }
         }
 
-        // Initialize app - THIS IS THE CRITICAL MISSING PIECE!
+        // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
             showDisclaimerModal(); // Show disclaimer first
             document.getElementById('messageInput').focus();
         });
-    </script>
-</body>
-</html>
