@@ -1,5 +1,4 @@
-// Import fetch for Node.js (Netlify provides this automatically in newer versions)
-const fetch = require('node-fetch');
+// Netlify functions have built-in fetch support - no import needed
 
 exports.handler = async (event, context) => {
   // Handle preflight CORS requests
