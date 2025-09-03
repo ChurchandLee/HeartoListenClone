@@ -993,7 +993,66 @@ Remember: Your goal is meaningful conversation and exploration, not immediate pr
         }
 
         // ChatGPT API call function with memory integration
+       // ChatGPT API call function with memory integration - UPDATED VERSION
         async function callChatGPT(messages) {
+            try {
+                // Add memory context to the system prompt
+                const memoryContext = generateMemoryContext();
+                const enhancedMessages = [...messages];
+                
+                if (memoryContext && enhancedMessages.length > 1) {
+                    // Add memory context to the system message
+                    enhancedMessages[0] = {
+                        ...enhancedMessages[0],
+                        content: enhancedMessages[0].content + memoryContext
+                    };
+                }
+
+                // Call your Vercel API endpoint instead of OpenAI directly
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        messages: enhancedMessages,
+                        model: 'gpt-4'
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const apiResponse = data.message.content.trim();
+                
+                // Check if API gave generic unhelpful response
+                if (apiResponse.includes("I'm really sorry that you're feeling this way, but I'm unable to provide the help that you need") ||
+                    apiResponse.includes("It's really important to talk things over with someone who can") ||
+                    apiResponse.includes("mental health professional or a trusted person in your life") ||
+                    apiResponse.includes("I'm not able to provide") ||
+                    apiResponse.includes("I can't provide the support you need")) {
+                    
+                    const lastUserMessage = messages[messages.length - 1].content;
+                    return generateIntelligentResponse(lastUserMessage, messages);
+                }
+                
+                // Return in the expected format
+                return {
+                    choices: [{
+                        message: {
+                            content: apiResponse
+                        }
+                    }]
+                };
+                
+            } catch (error) {
+                console.error('API Error:', error);
+                const lastUserMessage = messages[messages.length - 1].content;
+                return generateIntelligentResponse(lastUserMessage, messages);
+            }
+        }
             try {
                 // Add memory context to the system prompt
                 const memoryContext = generateMemoryContext();
