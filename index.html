@@ -994,7 +994,7 @@ Remember: Your goal is meaningful conversation and exploration, not immediate pr
 
         // ChatGPT API call function with memory integration
        // ChatGPT API call function with memory integration - UPDATED VERSION
-        async function callChatGPT(messages) {
+        async function /api/chat(messages) {
             try {
                 // Add memory context to the system prompt
                 const memoryContext = generateMemoryContext();
@@ -1131,7 +1131,7 @@ Remember: Your goal is meaningful conversation and exploration, not immediate pr
                     content: message
                 });
 
-                const data = await callChatGPT(conversationHistory);
+                const data = await /api/chat(conversationHistory);
                 const aiResponse = data.choices[0].message.content.trim();
                 
                 // Save this interaction to memory
