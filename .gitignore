@@ -1,0 +1,11 @@
+# Environment variables (just in case)
+.env
+.env.local
+.env.production
+
+# Vercel
+.vercel
+
+# OS files
+.DS_Store
+Thumbs.db
