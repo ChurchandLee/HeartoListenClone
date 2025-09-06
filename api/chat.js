@@ -1,48 +1,66 @@
-// api/chat.js
-import OpenAI from 'openai';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
+// /api/chat.js
 export default async function handler(req, res) {
-  // Only allow POST requests
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { messages, model = 'gpt-3.5-turbo' } = req.body;
+    const { messages, model = 'gpt-4-turbo' } = req.body;
 
-    // Validate that messages exist
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' });
     }
 
-    // Call OpenAI API
-    const completion = await openai.chat.completions.create({
-      model: model,
-      messages: messages,
-      temperature: 0.7,
-      max_tokens: 1000,
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: messages,
+        temperature: 0.75,
+        top_p: 0.9,
+        max_tokens: 800,
+        frequency_penalty: 0.3,
+        presence_penalty: 0.1,
+      })
     });
 
-    // Return the response
-    res.status(200).json({
-      message: completion.choices[0].message,
-      usage: completion.usage,
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('OpenAI API Error:', response.status, errorData);
+      return res.status(response.status).json({ 
+        error: `OpenAI API Error: ${response.status}`,
+        details: errorData 
+      });
+    }
+
+    const data = await response.json();
+    
+    return res.status(200).json({
+      message: {
+        content: data.choices[0].message.content
+      }
     });
 
   } catch (error) {
-    console.error('OpenAI API error:', error);
-    
-    // Handle different types of errors
-    if (error.status === 401) {
-      return res.status(401).json({ error: 'Invalid API key' });
-    } else if (error.status === 429) {
-      return res.status(429).json({ error: 'Rate limit exceeded' });
-    } else {
-      return res.status(500).json({ error: 'Internal server error' });
-    }
+    console.error('Server Error:', error);
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      details: error.message 
+    });
   }
 }
