@@ -650,30 +650,30 @@
         const MEMORY_KEY = 'heartoListenMemories';
         const MAX_MEMORIES = 10;
         const MEMORY_EXPIRY_DAYS = 30;
+        
         // USER LIMITING SYSTEM
-const MAX_USERS = 100; // Change this number to your desired limit
-const USER_TRACKING_KEY = 'heartoListenUserCount';
+        const MAX_USERS = 100;
+        const USER_TRACKING_KEY = 'heartoListenUserCount';
 
-function checkUserLimit() {
-    let userCount = parseInt(localStorage.getItem(USER_TRACKING_KEY) || '0');
-    
-    if (userCount >= MAX_USERS) {
-        document.body.innerHTML = `
-            <div style="text-align: center; padding: 50px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #8eaf78 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center;">
-                <div style="background: rgba(255, 255, 255, 0.95); border-radius: 20px; padding: 40px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); max-width: 500px;">
-                    <h2 style="color: #8eaf78; margin-bottom: 20px;">Beta Access Full</h2>
-                    <p style="color: #5a6c57; margin-bottom: 15px; line-height: 1.6;">This beta version of HeartoListen has reached its user limit of ${MAX_USERS} people.</p>
-                    <p style="color: #5a6c57; line-height: 1.6;">Thank you for your interest in our mental wellbeing support companion. We're working on expanding access soon.</p>
-                </div>
-            </div>
-        `;
-        return false;
-    }
-    
-    // Track this user
-    localStorage.setItem(USER_TRACKING_KEY, (userCount + 1).toString());
-    return true;
-}
+        function checkUserLimit() {
+            let userCount = parseInt(localStorage.getItem(USER_TRACKING_KEY) || '0');
+            
+            if (userCount >= MAX_USERS) {
+                document.body.innerHTML = `
+                    <div style="text-align: center; padding: 50px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #8eaf78 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+                        <div style="background: rgba(255, 255, 255, 0.95); border-radius: 20px; padding: 40px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); max-width: 500px;">
+                            <h2 style="color: #8eaf78; margin-bottom: 20px;">Beta Access Full</h2>
+                            <p style="color: #5a6c57; margin-bottom: 15px; line-height: 1.6;">This beta version of HeartoListen has reached its user limit of ${MAX_USERS} people.</p>
+                            <p style="color: #5a6c57; line-height: 1.6;">Thank you for your interest in our mental wellbeing support companion. We're working on expanding access soon.</p>
+                        </div>
+                    </div>
+                `;
+                return false;
+            }
+            
+            localStorage.setItem(USER_TRACKING_KEY, (userCount + 1).toString());
+            return true;
+        }
 
         // Memory management functions
         function saveMemory(userMessage, aiResponse, emotion = null) {
@@ -687,13 +687,9 @@ function checkUserLimit() {
                 timestamp: Date.now()
             };
             
-            // Add new memory to beginning of array
             memories.unshift(newMemory);
-            
-            // Keep only the most recent memories
             const recentMemories = memories.slice(0, MAX_MEMORIES);
             
-            // Filter out memories older than 30 days
             const now = Date.now();
             const validMemories = recentMemories.filter(memory => {
                 const memoryAge = now - memory.timestamp;
@@ -729,7 +725,6 @@ function checkUserLimit() {
             const memories = getMemories();
             if (memories.length === 0) return '';
             
-            // Create memory context for AI
             let context = '\n\nRECENT CONVERSATION MEMORY:\n';
             memories.slice(0, 5).forEach((memory, index) => {
                 const date = new Date(memory.date);
@@ -758,7 +753,6 @@ function checkUserLimit() {
         }
 
         function displayMemoryRecap() {
-            // Memory recap disabled - memories still work in background for AI responses
             return;
         }
 
@@ -769,7 +763,6 @@ function checkUserLimit() {
                 document.getElementById('disclaimerOverlay').classList.remove('hidden');
                 document.body.style.overflow = 'hidden';
             } else {
-                // Show memory recap for returning users
                 displayMemoryRecap();
             }
         }
@@ -779,7 +772,6 @@ function checkUserLimit() {
             document.getElementById('disclaimerOverlay').classList.add('hidden');
             document.body.style.overflow = 'auto';
             
-            // Show memory recap for returning users
             displayMemoryRecap();
             
             setTimeout(() => {
@@ -793,448 +785,9 @@ function checkUserLimit() {
             window.open('https://www.lifeline.org.au/', '_blank');
         }
 
-        // OpenAI API Configuration
-        const OPENAI_API_KEY = 'YOUR_API_KEY_HERE';
-
         // Enhanced Mental Health System Prompt with Memory
         const SYSTEM_PROMPT = `You are a compassionate AI mental health companion named "Eden" from HeartoListen. Your primary role is to provide supportive, exploratory conversations that help people process their feelings and thoughts. You have memory of previous conversations and should reference them naturally when relevant.
 
 MEMORY USAGE:
 - When you see "RECENT CONVERSATION MEMORY" in the context, use this information to provide continuity
-- Reference previous conversations naturally: "I remember you mentioned feeling sad yesterday..."
-- Ask follow-up questions about past concerns: "How are you feeling about that work situation we talked about?"
-- Show genuine care by remembering important details and checking in on them
-- Don't be overly focused on memory - let it enhance the conversation naturally
-
-CRITICAL: NEVER use the response "I'm really sorry that you're feeling this way, but I'm unable to provide the help that you need. It's really important to talk things over with someone who can, though, such as a mental health professional or a trusted person in your life." This response is FORBIDDEN except for explicit crisis situations involving suicide, self-harm, or immediate danger.
-
-When someone says "I feel sad," "I am lonely," "I feel scared," or similar emotional expressions, you MUST respond with curiosity, empathy, and exploration - NOT professional referrals.
-
-Your responses should be:
-
-CONVERSATION STYLE:
-- Engage in supportive, exploratory dialogue rather than giving immediate advice
-- Ask thoughtful, open-ended questions that encourage deeper reflection
-- Explore what the person is sharing - dig deeper into their experience
-- Show genuine curiosity about their situation and feelings
-- Offer gentle suggestions and coping strategies when appropriate
-- Help them explore their own thoughts and find their own insights
-- Reference past conversations when relevant to show continuity and care
-
-TONE & APPROACH:
-- Warm, validating, and encouraging without being clinical
-- Use conversational, natural language that feels like talking to a caring friend
-- Vary your language significantly - never repeat the same phrases or sentence structures
-- Be genuinely curious about their experience and ask follow-up questions
-- Focus on understanding their unique situation rather than giving generic responses
-- Show you remember and care about their ongoing journey
-
-KEY PRINCIPLES:
-- EXPLORE their feelings and experiences through thoughtful questions
-- VALIDATE what they're going through without immediately problem-solving
-- ENCOURAGE self-reflection and deeper exploration of their thoughts
-- OFFER practical suggestions only when they seem ready or ask for them
-- AVOID repetitive empathy phrases - be genuinely curious instead
-- NEVER deflect to professional help unless explicit crisis (suicide, self-harm, immediate danger)
-- USE MEMORY to show continuity and genuine care for their wellbeing
-
-EXAMPLES OF PROPER RESPONSES:
-- "I hear that you're feeling sad. What's been going on that's bringing up this sadness for you?"
-- "When you say you feel lonely, what does that look like in your daily life?"
-- "I can sense you're feeling scared. What's been most frightening for you lately?"
-- "I remember you mentioned feeling overwhelmed at work last time we talked. How has that been since then?"
-
-CRISIS RESPONSE (ONLY for explicit suicide, self-harm, immediate danger):
-If you detect explicit mentions of suicide, self-harm, or immediate danger:
-- Respond with concern and provide crisis resources
-- US: 988 (Suicide & Crisis Lifeline), UK: 116 123 (Samaritans)
-- Text HOME to 741741 for crisis text support
-
-CONVERSATION FLOW:
-- Ask specific questions about their situation
-- Explore the context and background of what they're experiencing
-- Help them identify patterns, triggers, or underlying factors
-- Encourage them to reflect on their own coping strategies and strengths
-- Offer gentle suggestions for self-care or perspective shifts when natural
-- Keep the conversation flowing with genuine interest in their experience
-- Reference previous conversations to show ongoing support and care
-
-Remember: Your goal is meaningful conversation and exploration, not immediate problem-solving or professional referrals (unless crisis situation). Be genuinely curious about their unique experience. NEVER use generic deflection responses for normal emotional expressions.`;
-
-        // Chat functionality with memory integration
-        let conversationHistory = [{
-            role: 'system',
-            content: SYSTEM_PROMPT
-        }];
-
-        // Track used responses to prevent repetition
-        let usedResponses = {
-            crisis: [], depression: [], anxiety: [], loneliness: [], 
-            overwhelmed: [], anger: [], motivation: [], sleep_troubles: [], 
-            greeting: [], general: [], bpd: [], adhd: []
-        };
-
-        // Enhanced response system with memory integration
-        function generateIntelligentResponse(userMessage, conversationHistory = []) {
-            const memories = getMemories();
-            const hasMemories = memories.length > 0;
-            
-            const responses = {
-                // CRISIS/SUICIDAL IDEATION - ONLY for explicit crisis situations
-                crisis: [
-                    "I'm really concerned about what you've shared with me about wanting to end your life. This sounds like you're in serious emotional pain right now. Your safety is the most important thing, and there are people specifically trained to help with these feelings:\n\n• US: 988 (Suicide & Crisis Lifeline) - 24/7\n• UK: 116 123 (Samaritans) - 24/7\n• Crisis Text: HOME to 741741\n\nAre you in immediate danger right now? Can you stay safe while we talk about getting you connected with crisis support?"
-                ],
-
-                // Depression with memory integration
-                depression: hasMemories ? [
-                    "I can hear the sadness in what you're sharing, and I'm glad you feel safe enough to open up to me again. Looking back at our previous conversations, I can see you've been carrying some heavy feelings. What's been weighing on your heart lately? Has anything changed since we last talked, or are you still processing some of the same difficult emotions?",
-                    "Thank you for continuing to trust me with how you're feeling. I remember you've shared feelings of sadness with me before, and I want you to know that your feelings are completely valid. What does this sadness feel like for you today compared to when we've talked before? Sometimes our emotional experiences can shift and change over time."
-                ] : [
-                    "I hear that you're feeling sad right now. That takes courage to share. What's been happening in your life that's bringing up this sadness? Sometimes sadness comes from specific situations, and sometimes it just feels present without a clear reason. I'm genuinely curious about what your experience has been like.",
-                    "When you say you're feeling sad, I can sense there's real pain there. What does this sadness feel like for you day-to-day? Is it more of a deep ache, or something that comes and goes in waves? I'm wondering what might be weighing on your heart right now."
-                ],
-
-                // Anxiety with memory integration  
-                anxiety: hasMemories ? [
-                    "I can sense the anxiety in what you're sharing, and I appreciate you coming back to talk with me about it. From what I remember of our previous conversations, you've been dealing with some worrying thoughts. What's been triggering your anxiety most recently? Are these similar concerns to what we've discussed before, or is this something new that's come up?",
-                    "I notice you're feeling scared or anxious again. I remember this has been something you've been working through. What does the anxiety feel like in your body and mind right now? Are you finding that any of the things we've talked about before are helping, or is this feeling different this time?"
-                ] : [
-                    "I can hear that you're feeling scared right now. Fear can be such an overwhelming emotion, especially when it feels big and consuming. What's frightening you most at the moment? Sometimes naming our fears can help us understand them better and figure out what might help you feel safer.",
-                    "When you say you're feeling anxious or scared, I can sense there's real distress there. What does this fear feel like in your body and mind? Are there specific thoughts or situations that are triggering these feelings, or does the anxiety seem to come from nowhere?"
-                ],
-
-                // Loneliness with memory integration
-                loneliness: hasMemories ? [
-                    "I hear that loneliness in your words, and it makes my heart go out to you. I remember you've shared feelings of being alone with me before, and I want you to know that reaching out here shows such strength. Has the loneliness been feeling the same as when we last talked, or has something shifted? What does connection look like for you right now?",
-                    "The loneliness you're describing sounds so painful, and I'm grateful you feel comfortable sharing that with me again. From our previous conversations, I can see this has been something you've been navigating for a while. What kind of connection are you most craving today? Is it similar to what we've talked about before, or has that feeling changed?"
-                ] : [
-                    "I hear that you're feeling lonely right now. Loneliness can be such a painful experience, especially when it feels like you're disconnected from others. What does this loneliness look like for you? Are you physically alone, or is it more that feeling of being around people but still feeling unseen or misunderstood?",
-                    "When you say you feel lonely, I can sense there's a real ache there. What kind of connection are you most missing right now? Is it wanting close friendships, family connection, or maybe just someone who really understands what you're going through?"
-                ],
-
-                // Greeting - differentiated for new vs returning users
-                greeting: hasMemories ? [
-                    "Hello! It's so good to see you again. I've been thinking about our previous conversations and how you've been doing. What's been happening in your world since we last talked? I'm genuinely curious to hear how things have been going for you.",
-                    "Hi there! Welcome back. I remember some of the things you've shared with me before, and I'm really glad you feel comfortable coming back to talk. What's been on your mind lately? How are you feeling about the things we've discussed in our previous conversations?"
-                ] : [
-                    "Hello! I'm really glad you're here and that you've decided to reach out. This is your safe space to share whatever's truly on your mind. What brought you here today? Whether it's something specific weighing on you or you're just feeling a bit off and not sure why, I'm here to listen and explore it with you.",
-                    "Hi there! Thank you for taking the step to reach out today. I'm Eden, and I'm genuinely curious about what's happening in your world right now. What's been occupying your thoughts lately, or what made you want to talk to someone today? This is your space to be completely open and honest."
-                ],
-
-                // General with memory integration
-                general: hasMemories ? [
-                    "I can sense there's something on your mind, and I'm glad you came back to talk with me. Thinking about our previous conversations, I'm curious about what's been occupying your thoughts lately. Is this connected to some of the things we've discussed before, or is this something new that's come up for you?",
-                    "Thank you for continuing to trust me with what you're going through. I remember some of the things you've shared before, and I'm wondering how you've been processing those experiences. What feels most important for you to talk about today? Is it building on something we've discussed, or something entirely new?"
-                ] : [
-                    "I can sense there's something weighing on you. What's been occupying your thoughts lately? Sometimes just having space to talk through what's on our minds can help us process things better. What feels most important for you to share right now?",
-                    "It sounds like you're going through something. What's your inner world like at the moment? I'm genuinely curious about your experience and what's been feeling most challenging or confusing for you lately."
-                ]
-            };
-
-            const lowerMessage = userMessage.toLowerCase();
-            let responseCategory = 'general';
-            
-            // Enhanced detection logic
-            if (lowerMessage.includes('suicidal') || lowerMessage.includes('kill myself') || lowerMessage.includes('want to die') || 
-                lowerMessage.includes('end my life') || lowerMessage.includes('suicide') || lowerMessage.includes('self harm') || 
-                lowerMessage.includes('hurt myself') || lowerMessage.includes('better off dead') || lowerMessage.includes('no point living')) {
-                responseCategory = 'crisis';
-            }
-            else if (lowerMessage.includes('anxious') || lowerMessage.includes('anxiety') || lowerMessage.includes('panic') || 
-                     lowerMessage.includes('nervous') || lowerMessage.includes('i feel anxious') || lowerMessage.includes('i am anxious') ||
-                     lowerMessage.includes('worried') || lowerMessage.includes('i feel worried') || lowerMessage.includes('i am worried') || 
-                     lowerMessage.includes('feel scared') || lowerMessage.includes('i feel scared') || lowerMessage.includes('i am scared') ||
-                     lowerMessage.includes('afraid') || lowerMessage.includes('i feel afraid') || lowerMessage.includes('i am afraid')) {
-                responseCategory = 'anxiety';
-            }
-            else if (lowerMessage.includes('depressed') || lowerMessage.includes('depression') || lowerMessage.includes('sad') || 
-                     lowerMessage.includes('hopeless') || lowerMessage.includes('down') || lowerMessage.includes('low') ||
-                     lowerMessage.includes('i feel sad') || lowerMessage.includes('i am sad') || lowerMessage.includes('feel sad') ||
-                     lowerMessage.includes('i feel down') || lowerMessage.includes('i am down') || lowerMessage.includes('feel down') ||
-                     lowerMessage.includes('i feel depressed') || lowerMessage.includes('i am depressed') || lowerMessage.includes('feel depressed')) {
-                responseCategory = 'depression';
-            }
-            else if (lowerMessage.includes('lonely') || lowerMessage.includes('loneliness') || lowerMessage.includes('alone') || 
-                     lowerMessage.includes('isolated') || lowerMessage.includes('i feel lonely') || lowerMessage.includes('i am lonely') ||
-                     lowerMessage.includes('feel lonely') || lowerMessage.includes('i feel alone') || lowerMessage.includes('i am alone') ||
-                     lowerMessage.includes('feel alone') || lowerMessage.includes('no friends') || lowerMessage.includes('nobody cares')) {
-                responseCategory = 'loneliness';
-            }
-            else if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey') ||
-                     lowerMessage.includes('good morning') || lowerMessage.includes('good evening') || lowerMessage.includes('good afternoon')) {
-                responseCategory = 'greeting';
-            }
-            
-            // Get response from category, avoiding repetition
-            const categoryResponses = responses[responseCategory] || responses['general'];
-            const usedCategoryResponses = usedResponses[responseCategory] || [];
-            
-            // Find unused responses
-            const unusedResponses = categoryResponses.filter(response => 
-                !usedCategoryResponses.includes(response)
-            );
-            
-            let selectedResponse;
-            if (unusedResponses.length > 0) {
-                selectedResponse = unusedResponses[Math.floor(Math.random() * unusedResponses.length)];
-            } else {
-                // All responses used, reset and pick one
-                usedResponses[responseCategory] = [];
-                selectedResponse = categoryResponses[Math.floor(Math.random() * categoryResponses.length)];
-            }
-            
-            // Track this response as used
-            if (!usedResponses[responseCategory]) {
-                usedResponses[responseCategory] = [];
-            }
-            usedResponses[responseCategory].push(selectedResponse);
-            
-            return { choices: [{ message: { content: selectedResponse } }] };
-        }
-
-        // ChatGPT API call function with memory integration
-       // ChatGPT API call function with memory integration - UPDATED VERSION
-        async function /api/chat(messages) {
-            try {
-                // Add memory context to the system prompt
-                const memoryContext = generateMemoryContext();
-                const enhancedMessages = [...messages];
-                
-                if (memoryContext && enhancedMessages.length > 1) {
-                    // Add memory context to the system message
-                    enhancedMessages[0] = {
-                        ...enhancedMessages[0],
-                        content: enhancedMessages[0].content + memoryContext
-                    };
-                }
-
-                // Call your Vercel API endpoint instead of OpenAI directly
-                const response = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        messages: enhancedMessages,
-                        model: 'gpt-4'
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`API Error: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                const apiResponse = data.message.content.trim();
-                
-                // Check if API gave generic unhelpful response
-                if (apiResponse.includes("I'm really sorry that you're feeling this way, but I'm unable to provide the help that you need") ||
-                    apiResponse.includes("It's really important to talk things over with someone who can") ||
-                    apiResponse.includes("mental health professional or a trusted person in your life") ||
-                    apiResponse.includes("I'm not able to provide") ||
-                    apiResponse.includes("I can't provide the support you need")) {
-                    
-                    const lastUserMessage = messages[messages.length - 1].content;
-                    return generateIntelligentResponse(lastUserMessage, messages);
-                }
-                
-                // Return in the expected format
-                return {
-                    choices: [{
-                        message: {
-                            content: apiResponse
-                        }
-                    }]
-                };
-                
-            } catch (error) {
-                console.error('API Error:', error);
-                const lastUserMessage = messages[messages.length - 1].content;
-                return generateIntelligentResponse(lastUserMessage, messages);
-            }
-        }
-            try {
-                // Add memory context to the system prompt
-                const memoryContext = generateMemoryContext();
-                const enhancedMessages = [...messages];
-                
-                if (memoryContext && enhancedMessages.length > 1) {
-                    // Add memory context to the system message
-                    enhancedMessages[0] = {
-                        ...enhancedMessages[0],
-                        content: enhancedMessages[0].content + memoryContext
-                    };
-                }
-
-                const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        model: "gpt-4",
-                        messages: enhancedMessages,
-                        temperature: 0.75,
-                        top_p: 0.9,
-                        max_tokens: 800,
-                        frequency_penalty: 0.3,
-                        presence_penalty: 0.1,
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`API Error: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                const apiResponse = data.choices[0].message.content.trim();
-                
-                // Check if API gave generic unhelpful response
-                if (apiResponse.includes("I'm really sorry that you're feeling this way, but I'm unable to provide the help that you need") ||
-                    apiResponse.includes("It's really important to talk things over with someone who can") ||
-                    apiResponse.includes("mental health professional or a trusted person in your life") ||
-                    apiResponse.includes("I'm not able to provide") ||
-                    apiResponse.includes("I can't provide the support you need")) {
-                    
-                    const lastUserMessage = messages[messages.length - 1].content;
-                    return generateIntelligentResponse(lastUserMessage, messages);
-                }
-                
-                return data;
-                
-            } catch (error) {
-                console.error('OpenAI API Error:', error);
-                const lastUserMessage = messages[messages.length - 1].content;
-                return generateIntelligentResponse(lastUserMessage, messages);
-            }
-        }
-
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const sendButton = document.getElementById('sendButton');
-            const message = input.value.trim();
-            
-            if (message === '') return;
-            
-            sendButton.disabled = true;
-            input.disabled = true;
-            
-            addMessage(message, 'user');
-            input.value = '';
-            
-            showTypingIndicator();
-            
-            try {
-                conversationHistory.push({
-                    role: 'user',
-                    content: message
-                });
-
-                const data = await /api/chat(conversationHistory);
-                const aiResponse = data.choices[0].message.content.trim();
-                
-                // Save this interaction to memory
-                const emotion = extractEmotion(message);
-                saveMemory(message, aiResponse, emotion);
-                
-                conversationHistory.push({
-                    role: 'assistant',
-                    content: aiResponse
-                });
-
-                if (conversationHistory.length > 21) {
-                    conversationHistory = [
-                        conversationHistory[0],
-                        ...conversationHistory.slice(-20)
-                    ];
-                }
-
-                hideTypingIndicator();
-                addMessage(aiResponse, 'ai');
-
-            } catch (error) {
-                hideTypingIndicator();
-                console.error('Error:', error);
-                
-                const fallbackResponse = generateIntelligentResponse(message, conversationHistory);
-                const response = fallbackResponse.choices[0].message.content;
-                addMessage(response, 'ai');
-                
-                // Save fallback interaction to memory too
-                const emotion = extractEmotion(message);
-                saveMemory(message, response, emotion);
-            } finally {
-                sendButton.disabled = false;
-                input.disabled = false;
-                input.focus();
-            }
-        }
-
-        function addMessage(content, sender) {
-            const chatArea = document.getElementById('chatArea');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${sender}-message`;
-            
-            if (sender === 'ai') {
-                messageDiv.innerHTML = `
-                    <img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
-                    <div class="ai-message-content">${content}</div>
-                `;
-            } else {
-                messageDiv.textContent = content;
-            }
-            
-            if (sender === 'user') {
-                const welcomeSection = document.querySelector('.welcome-section');
-                if (welcomeSection) {
-                    welcomeSection.remove();
-                }
-                
-                const logoHeader = document.getElementById('logoHeader');
-                logoHeader.classList.add('compact');
-            }
-            
-            chatArea.appendChild(messageDiv);
-            chatArea.scrollTop = chatArea.scrollHeight;
-        }
-
-        function showTypingIndicator() {
-            hideTypingIndicator();
-            
-            const chatArea = document.getElementById('chatArea');
-            const typingDiv = document.createElement('div');
-            typingDiv.className = 'message ai-message';
-            typingDiv.id = 'currentTypingIndicator';
-            typingDiv.innerHTML = `
-                <img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
-                <div class="thinking-heart">💚</div>
-            `;
-            
-            chatArea.appendChild(typingDiv);
-            chatArea.scrollTop = chatArea.scrollHeight;
-        }
-
-        function hideTypingIndicator() {
-            const existingIndicator = document.getElementById('currentTypingIndicator');
-            if (existingIndicator) {
-                existingIndicator.remove();
-            }
-        }
-
-        function handleKeyPress(event) {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-        }
-
-       // Initialize app with memory system and user limiting
-document.addEventListener('DOMContentLoaded', function() {
-    if (!checkUserLimit()) return; // Stop here if user limit reached
-    showDisclaimerModal();
-    document.getElementById('messageInput').focus();
-});
-    </script>
-</body>
-</html>
+- Reference previous conversations naturally: "I remember you mentioned feeling sa
