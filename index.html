@@ -9,8 +9,8 @@
     
     <!-- PWA and App Icon Meta Tags -->
     <link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/earheart.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/earheart.png" >
-    <link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/earheart.png" >
+    <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/earheart.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/earheart.png">
     <link rel="manifest" href="app-manifest.json">
     
     <!-- iOS specific -->
@@ -19,7 +19,7 @@
     <meta name="apple-mobile-web-app-title" content="HeartoListen">
     
     <!-- Android specific -->
-    <meta name="mobile-web-app-capable" content="yes" >
+    <meta name="mobile-web-app-capable" content="yes">
     
     <style>
         * {
@@ -650,30 +650,6 @@
         const MEMORY_KEY = 'heartoListenMemories';
         const MAX_MEMORIES = 10;
         const MEMORY_EXPIRY_DAYS = 30;
-        
-        // USER LIMITING SYSTEM
-        const MAX_USERS = 100;
-        const USER_TRACKING_KEY = 'heartoListenUserCount';
-
-        function checkUserLimit() {
-            let userCount = parseInt(localStorage.getItem(USER_TRACKING_KEY) || '0');
-            
-            if (userCount >= MAX_USERS) {
-                document.body.innerHTML = `
-                    <div style="text-align: center; padding: 50px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #8eaf78 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center;">
-                        <div style="background: rgba(255, 255, 255, 0.95); border-radius: 20px; padding: 40px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); max-width: 500px;">
-                            <h2 style="color: #8eaf78; margin-bottom: 20px;">Beta Access Full</h2>
-                            <p style="color: #5a6c57; margin-bottom: 15px; line-height: 1.6;">This beta version of HeartoListen has reached its user limit of ${MAX_USERS} people.</p>
-                            <p style="color: #5a6c57; line-height: 1.6;">Thank you for your interest in our mental wellbeing support companion. We're working on expanding access soon.</p>
-                        </div>
-                    </div>
-                `;
-                return false;
-            }
-            
-            localStorage.setItem(USER_TRACKING_KEY, (userCount + 1).toString());
-            return true;
-        }
 
         // Memory management functions
         function saveMemory(userMessage, aiResponse, emotion = null) {
@@ -791,3 +767,212 @@
 MEMORY USAGE:
 - When you see "RECENT CONVERSATION MEMORY" in the context, use this information to provide continuity
 - Reference previous conversations naturally: "I remember you mentioned feeling sad yesterday..."
+- Ask follow-up questions about past concerns: "How are you feeling about that work situation we talked about?"
+- Show genuine care by remembering important details and checking in on them
+- Don't be overly focused on memory - let it enhance the conversation naturally
+
+CRITICAL: NEVER use the response "I'm really sorry that you're feeling this way, but I'm unable to provide the help that you need. It's really important to talk things over with someone who can, though, such as a mental health professional or a trusted person in your life." This response is FORBIDDEN except for explicit crisis situations involving suicide, self-harm, or immediate danger.
+
+When someone says "I feel sad," "I am lonely," "I feel scared," or similar emotional expressions, you MUST respond with curiosity, empathy, and exploration - NOT professional referrals.
+
+Your responses should be:
+
+CONVERSATION STYLE:
+- Engage in supportive, exploratory dialogue rather than giving immediate advice
+- Ask thoughtful, open-ended questions that encourage deeper reflection
+- Explore what the person is sharing - dig deeper into their experience
+- Show genuine curiosity about their situation and feelings
+- Offer gentle suggestions and coping strategies when appropriate
+- Help them explore their own thoughts and find their own insights
+- Reference past conversations when relevant to show continuity and care
+
+TONE & APPROACH:
+- Warm, validating, and encouraging without being clinical
+- Use conversational, natural language that feels like talking to a caring friend
+- Vary your language significantly - never repeat the same phrases or sentence structures
+- Be genuinely curious about their experience and ask follow-up questions
+- Focus on understanding their unique situation rather than giving generic responses
+- Show you remember and care about their ongoing journey
+
+KEY PRINCIPLES:
+- EXPLORE their feelings and experiences through thoughtful questions
+- VALIDATE what they're going through without immediately problem-solving
+- ENCOURAGE self-reflection and deeper exploration of their thoughts
+- OFFER practical suggestions only when they seem ready or ask for them
+- AVOID repetitive empathy phrases - be genuinely curious instead
+- NEVER deflect to professional help unless explicit crisis (suicide, self-harm, immediate danger)
+- USE MEMORY to show continuity and genuine care for their wellbeing
+
+CRISIS RESPONSE (ONLY for explicit suicide, self-harm, immediate danger):
+If you detect explicit mentions of suicide, self-harm, or immediate danger:
+- Respond with concern and provide crisis resources
+- US: 988 (Suicide & Crisis Lifeline), UK: 116 123 (Samaritans)
+- Text HOME to 741741 for crisis text support
+
+CONVERSATION FLOW:
+- Ask specific questions about their situation
+- Explore the context and background of what they're experiencing
+- Help them identify patterns, triggers, or underlying factors
+- Encourage them to reflect on their own coping strategies and strengths
+- Offer gentle suggestions for self-care or perspective shifts when natural
+- Keep the conversation flowing with genuine interest in their experience
+- Reference previous conversations to show ongoing support and care
+
+Remember: Your goal is meaningful conversation and exploration, not immediate problem-solving or professional referrals (unless crisis situation). Be genuinely curious about their unique experience. NEVER use generic deflection responses for normal emotional expressions.`;
+
+        // Chat functionality with memory integration
+        let conversationHistory = [{
+            role: 'system',
+            content: SYSTEM_PROMPT
+        }];
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+            const message = input.value.trim();
+            
+            if (message === '') return;
+            
+            sendButton.disabled = true;
+            input.disabled = true;
+            
+            addMessage(message, 'user');
+            input.value = '';
+            
+            showTypingIndicator();
+            
+            try {
+                const memoryContext = generateMemoryContext();
+                const enhancedMessages = [...conversationHistory];
+                
+                if (memoryContext && enhancedMessages.length > 1) {
+                    enhancedMessages[0] = {
+                        ...enhancedMessages[0],
+                        content: enhancedMessages[0].content + memoryContext
+                    };
+                }
+
+                enhancedMessages.push({
+                    role: 'user',
+                    content: message
+                });
+
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        messages: enhancedMessages,
+                        model: 'gpt-4o'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const aiResponse = data.message.content.trim();
+                
+                // Save this interaction to memory
+                const emotion = extractEmotion(message);
+                saveMemory(message, aiResponse, emotion);
+                
+                conversationHistory.push({
+                    role: 'user',
+                    content: message
+                });
+
+                conversationHistory.push({
+                    role: 'assistant',
+                    content: aiResponse
+                });
+
+                if (conversationHistory.length > 21) {
+                    conversationHistory = [
+                        conversationHistory[0],
+                        ...conversationHistory.slice(-20)
+                    ];
+                }
+
+                hideTypingIndicator();
+                addMessage(aiResponse, 'ai');
+
+            } catch (error) {
+                hideTypingIndicator();
+                console.error('Error:', error);
+                addMessage('I apologize, but I encountered a technical issue. Please try sending your message again.', 'error');
+            } finally {
+                sendButton.disabled = false;
+                input.disabled = false;
+                input.focus();
+            }
+        }
+
+        function addMessage(content, sender) {
+            const chatArea = document.getElementById('chatArea');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+            
+            if (sender === 'ai') {
+                messageDiv.innerHTML = `
+                    <img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
+                    <div class="ai-message-content">${content}</div>
+                `;
+            } else {
+                messageDiv.textContent = content;
+            }
+            
+            if (sender === 'user') {
+                const welcomeSection = document.querySelector('.welcome-section');
+                if (welcomeSection) {
+                    welcomeSection.remove();
+                }
+                
+                const logoHeader = document.getElementById('logoHeader');
+                logoHeader.classList.add('compact');
+            }
+            
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            hideTypingIndicator();
+            
+            const chatArea = document.getElementById('chatArea');
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message ai-message';
+            typingDiv.id = 'currentTypingIndicator';
+            typingDiv.innerHTML = `
+                <img src="https://raw.githubusercontent.com/ChurchandLee/ubiquitous-guacamole/main/Eden.png" alt="Eden Avatar" class="ai-avatar">
+                <div class="thinking-heart">💚</div>
+            `;
+            
+            chatArea.appendChild(typingDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            const existingIndicator = document.getElementById('currentTypingIndicator');
+            if (existingIndicator) {
+                existingIndicator.remove();
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // Initialize app with memory system
+        document.addEventListener('DOMContentLoaded', function() {
+            showDisclaimerModal();
+            document.getElementById('messageInput').focus();
+        });
+    </script>
+</body>
+</html>
