@@ -2,11 +2,14 @@
   "name": "heartolistenapp",
   "version": "1.0.0",
   "description": "AI Mental Wellbeing Support Companion",
-  "engines": {
-    "node": "22.x"
-  },
+  "main": "server.js",
   "scripts": {
-    "dev": "vercel dev",
-    "deploy": "vercel --prod"
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
