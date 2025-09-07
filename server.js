@@ -18,7 +18,7 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    const { messages, model = 'gpt-4-turbo' } = req.body;
+   const { messages, model = 'gpt-4o' } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' });
